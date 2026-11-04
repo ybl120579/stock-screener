@@ -3,7 +3,7 @@
 本地版（`mobile/app.py`）要电脑开着、同一个 WiFi。云端版把「跑筛选」和「看页面」都搬到云上：
 
 ```
-GitHub Actions（每天北京时间 15:40 自动跑）
+GitHub Actions（每个交易日尝试 4 次：15:40 / 16:20 / 17:40 / 20:10）
       │  ① python build_static.py  ← 拉东财数据、跑四条件、算出冷度分
       │  ② 把结果写进 docs/data/*.json
       ▼
@@ -45,10 +45,13 @@ docs/
 
 `.github/workflows/daily.yml`：
 
-1. `cron: 40 7 * * 1-5`（UTC 07:40 = 北京时间 15:40，周一到周五）
+1. cron 排了 4 个时间点（UTC 07:40 / 08:20 / 09:40 / 12:10 = 北京 15:40 / 16:20 / 17:40 / 20:10，周一到周五）
 2. 装 `requirements-ci.txt`（requests / pandas / akshare）
-3. `python build_static.py --if-missing`——当天已有快照就跳过，节假日不会重复跑
+3. `python build_static.py --if-missing`——当天已有快照就跳过，所以后面几次只在前面失败时才真正干活，节假日也不会重复跑
 4. 有变化就 `git commit` + `git push`，Pages 自动重新发布
+
+为什么要试 4 次：东财对云机房 IP 会做短时限流（返回 `rc=102` 或 502，几分钟内所有请求都失败）。
+脚本内部有全局限速、镜像轮换、20 秒冷却和整轮重试；万一整个小时都被限，下个小时的机器换了个 IP 基本就能成功。
 
 GitHub 的定时任务偶尔会延迟几分钟到半小时才触发，对**日线**数据没有影响。如果那天 GitHub 完全没跑（平台故障），第二天会照常更新，也可以手动补。
 

@@ -155,13 +155,22 @@ stock-screener/
 
 ## 手机 App
 
-想每天在手机上直接看名单：双击 `mobile/启动手机App服务.bat`，手机连同一 WiFi 打开
-窗口里打印的地址即可（可「添加到主屏幕」当 App 用），每个交易日 15:35 自动更新。
+**已经上线，手机上直接打开**：<https://ybl120579.github.io/stock-screener/>
+（iOS Safari / 安卓 Chrome 里「添加到主屏幕」，桌面就会出现「首板·低冷度」图标，全屏像 App 一样用）
+
+- 云端版每交易日自动跑 4 次（15:40 / 16:20 / 17:40 / 20:10），成功了后面的自动跳过
+- 电脑关着、人在外面、只有 4G 也能看
+- 架构与部署细节见 [CLOUD.md](CLOUD.md)
+
+| 云端名单 | 云端详情 |
+| --- | --- |
+| <img src="mobile/shots/cloud-list.png" width="280"> | <img src="mobile/shots/cloud-detail.png" width="280"> |
+
+**在自己家的局域网里用**（能手动刷新、数据现拉）：双击 `mobile/启动手机App服务.bat`，
+手机连同一 WiFi 打开窗口里打印的地址，每个交易日 15:35 自动更新。
 详见 [mobile/README.md](mobile/README.md)。
 
-**想在外面也能看、电脑还关着？** 用云端版：GitHub Actions 每天北京时间 15:40 自动跑一次，
-把结果发布成静态网页（GitHub Pages），手机任何网络都能打开。前端是同一套代码，
-启动时自动判断是连本地服务（live）还是读静态文件（static）。部署方式见 [CLOUD.md](CLOUD.md)。
+前端是同一套代码，启动时先探测本地服务（live 模式，能刷新）还是读静态文件（static 模式，云端版）。
 
 `python verify.py` 会跳过筛选模块，直接从原始接口重算几只票的首板日涨幅、首板前后涨停情况、
 回踩幅度，并用 akshare 独立拉涨停池交叉核对连板数，用来确认报告里的数字没有算错。
