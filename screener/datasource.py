@@ -29,6 +29,12 @@ HEADERS = {
 
 _thread_local = threading.local()
 
+# 东财的行情接口有多个镜像域名，单个域名偶发返回 data:null（尤其海外/云机房 IP），
+# 轮换一遍能显著提高云端的成功率。
+KL_HOSTS = ["push2his.eastmoney.com", "33.push2his.eastmoney.com",
+            "7.push2his.eastmoney.com", "62.push2his.eastmoney.com"]
+
+
 def _session():
     s = getattr(_thread_local, "s", None)
     if s is None:
@@ -51,6 +57,28 @@ def _get_json(url, timeout=25, retries=3):
             last = e
             time.sleep(0.6 * (i + 1))
     raise RuntimeError(f"请求失败: {url[:90]} -> {last}")
+
+def _kline_url(host, sec, lmt, fqt):
+    return (f"https://{host}/api/qt/stock/kline/get?secid={sec}"
+            f"&fields1=f1,f2,f3,f4,f5,f6&fields2={_KL_FIELDS}"
+            f"&klt=101&fqt={fqt}&end=20500101&lmt={lmt}")
+
+
+def _fetch_klines_any(sec: str, lmt: int, fqt: int = 1):
+    """按镜像轮换取 K 线，返回 (name, klines) 或 None。data 为空也会换下一个域名。"""
+    for host in KL_HOSTS:
+        for attempt in range(2):
+            try:
+                js = _get_json(_kline_url(host, sec, lmt, fqt), retries=2)
+            except Exception:  # noqa: BLE001
+                js = None
+            data = (js or {}).get("data") or {}
+            klines = data.get("klines") or []
+            if klines:
+                return data.get("name"), klines
+            time.sleep(0.8 + 1.2 * attempt)
+    return None
+
 
 def _cache_path(kind, key):
     return os.path.join(CACHE_DIR, kind, f"{key}.pkl")
@@ -85,17 +113,10 @@ _KL_COLS = ["date", "open", "close", "high", "low", "volume", "amount",
 
 def fetch_kline(code: str, lmt: int = 160, fqt: int = 1):
     """单只股票日K（前复权），返回 DataFrame 或 None。"""
-    url = (f"https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={secid(code)}"
-           f"&fields1=f1,f2,f3,f4,f5,f6&fields2={_KL_FIELDS}"
-           f"&klt=101&fqt={fqt}&end=20500101&lmt={lmt}")
-    try:
-        js = _get_json(url)
-    except Exception:  # noqa: BLE001
+    got = _fetch_klines_any(secid(code), lmt, fqt)
+    if not got:
         return None
-    data = js.get("data") or {}
-    klines = data.get("klines") or []
-    if not klines:
-        return None
+    name, klines = got
     rows = []
     for line in klines:
         p = line.split(",")
@@ -103,28 +124,53 @@ def fetch_kline(code: str, lmt: int = 160, fqt: int = 1):
                      float(p[5]), float(p[6]), float(p[7]), float(p[8]),
                      float(p[9]), float(p[10])])
     df = pd.DataFrame(rows, columns=_KL_COLS)
-    df["name"] = data.get("name")
+    df["name"] = name
     return df
 
 def get_trade_days(lmt: int = 60):
-    """最近交易日列表（升序）。每次实时拉取，量很小。"""
+    """最近交易日列表（升序）。
+
+    东财指数 K 线 → (失败则) akshare 新浪交易日历 → (再失败) 工作日近似。
+    云端跑定时任务时，任何一环偶发抽风都不该让当天没有结果。
+    """
     df = fetch_kline_index("000001", lmt)
-    if df is None:
-        raise RuntimeError("无法获取交易日历")
-    return df["date"].tolist()
+    if df is not None and len(df):
+        return df["date"].tolist()
+
+    days = _trade_days_akshare(lmt)
+    if days:
+        return days
+
+    print("[warn] 交易日历接口不可用，改用工作日近似", file=sys.stderr)
+    from datetime import date, timedelta
+    out, cur = [], date.today()
+    while len(out) < lmt:
+        if cur.weekday() < 5:
+            out.append(cur.isoformat())
+        cur -= timedelta(days=1)
+    return sorted(out)
+
+
+def _trade_days_akshare(lmt: int):
+    try:
+        import akshare as ak
+        with contextlib.redirect_stderr(io.StringIO()):
+            df = ak.tool_trade_date_hist_sina()
+        col = "trade_date" if "trade_date" in df.columns else df.columns[0]
+        vals = sorted({str(v)[:10] for v in df[col].astype(str)})
+        from datetime import date
+        today = date.today().isoformat()
+        vals = [v for v in vals if v <= today]
+        return vals[-lmt:]
+    except Exception:  # noqa: BLE001
+        return None
 
 def fetch_kline_index(code: str, lmt: int = 60):
     sec = "1." + code if code.startswith("0") and code == "000001" else secid(code)
-    url = (f"https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={sec}"
-           f"&fields1=f1,f2,f3,f4,f5,f6&fields2={_KL_FIELDS}"
-           f"&klt=101&fqt=1&end=20500101&lmt={lmt}")
-    try:
-        js = _get_json(url)
-    except Exception:  # noqa: BLE001
+    got = _fetch_klines_any(sec, lmt, 1)
+    if not got:
         return None
-    kl = (js.get("data") or {}).get("klines") or []
-    if not kl:
-        return None
+    kl = got[1]
     return pd.DataFrame([l.split(",")[0] for l in kl], columns=["date"])
 
 # ------------------------------------------------------------------ 全景快照

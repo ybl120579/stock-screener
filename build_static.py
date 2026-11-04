@@ -87,7 +87,16 @@ def main():
 
     cfg = cfgmod.load_config(os.path.join(HERE, "config.json")) if os.path.exists(
         os.path.join(HERE, "config.json")) else cfgmod.load_config()
-    days = ds.get_trade_days(lmt=60)
+    days = None
+    for attempt in (1, 2, 3):
+        try:
+            days = ds.get_trade_days(lmt=60)
+            break
+        except Exception as e:  # noqa: BLE001
+            log(f"取交易日历失败（第 {attempt} 次）：{e}")
+            if attempt == 3:
+                raise SystemExit("交易日历不可用，保留上一次数据")
+            time.sleep(15)
     as_of = args.date or days[-1]
     if as_of > days[-1]:
         raise SystemExit(f"还没有 {as_of} 的数据（最近交易日 {days[-1]}）")

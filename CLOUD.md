@@ -44,19 +44,25 @@ docs/
 
 GitHub 的定时任务偶尔会延迟几分钟到半小时才触发，对**日线**数据没有影响。如果那天 GitHub 完全没跑（平台故障），第二天会照常更新，也可以手动补。
 
-## 第一次部署（一次性）
+## 已经部署好的地址
 
-仓库名随意，例如 `stock-screener`。部署完地址是：
+| 用途 | 地址 |
+| --- | --- |
+| **手机打开（收藏这个）** | https://ybl120579.github.io/stock-screener/ |
+| 仓库 | https://github.com/ybl120579/stock-screener |
+| 每天跑的任务 | 仓库 → Actions → 「每日选股」 |
 
-```
-https://<你的用户名>.github.io/stock-screener/
-```
+手机上打开后用浏览器的「分享 → 添加到主屏幕」，桌面就会出现「首板·低冷度」图标，点开像 App 一样全屏。
 
-三步：
+> 站点是公开的（GitHub Pages 免费版只能公开），里面只有公开行情算出来的名单，不含任何密钥。想私密可以改成 Cloudflare Pages + 密码，或者只在本地用。
 
-1. **推代码**（本地已 `git init` 并提交好，见下面的命令）
-2. **开 Pages**：仓库 → Settings → Pages → Source 选 `Deploy from a branch`，分支 `main`、目录 `/docs`，保存
-3. 等 1～2 分钟，打开上面那个地址
+## 从零再部署一次（换账号时）
+
+1. **推代码**：`python tools/deploy_github.py --token <你的token> --repo stock-screener`
+2. **开 Pages**：仓库 → Settings → Pages → Source 选 `Deploy from a branch`，分支 `main`、目录 `/docs`
+3. 等 1～2 分钟，打开 `https://<用户名>.github.io/stock-screener/`
+
+`--token` 需要 `repo` + `workflow` 两个权限，用完就可以在 GitHub → Settings → Developer settings → Personal access tokens 里删掉；脚本只在内存里用它，不写进 `.git/config`。
 
 ## 手动补跑 / 重跑
 
