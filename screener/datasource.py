@@ -31,6 +31,11 @@ _thread_local = threading.local()
 
 # 东财的行情接口有多个镜像域名，单个域名偶发返回 data:null（尤其海外/云机房 IP），
 # 轮换一遍能显著提高云端的成功率。
+SPOT_HOSTS = ["push2.eastmoney.com", "1.push2.eastmoney.com",
+              "7.push2.eastmoney.com", "33.push2.eastmoney.com",
+              "82.push2.eastmoney.com", "push2delay.eastmoney.com"]
+LOW_CONCURRENCY = os.environ.get("SCREENER_LOW_CONCURRENCY") == "1"
+
 KL_HOSTS = ["push2his.eastmoney.com", "33.push2his.eastmoney.com",
             "7.push2his.eastmoney.com", "62.push2his.eastmoney.com"]
 
@@ -179,11 +184,34 @@ _SPOT_FIELDS = ("f2,f3,f5,f6,f8,f9,f10,f12,f14,f15,f16,f17,f18,f20,f21,f22,"
                 "f23,f24,f25,f26,f100,f62,f184")
 
 def _spot_page(pn: int):
-    url = ("https://push2.eastmoney.com/api/qt/clist/get"
-           f"?pn={pn}&pz=100&po=1&np=1&fltt=2&invt=2&fid=f12&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23"
-           f"&fields={_SPOT_FIELDS}")
-    js = _get_json(url)
-    return js.get("data") or {}
+    """取第 pn 页快照。
+
+    东财对同一 IP 有短时限流（返回 rc=102 / data:null，或 502），因此：
+    镜像域名轮换 + 每个域名两次退避重试；连续 3 个域名都失败就快速放弃，
+    交给上层的“整轮重试”处理，避免在限流窗口里干耗时间。
+    """
+    qs = ("/api/qt/clist/get"
+          f"?pn={pn}&pz=100&po=1&np=1&fltt=2&invt=2&fid=f12"
+          f"&fs=m:0+t:6,m:0+t:80,m:1:t:2,m:1+t:23&fields={_SPOT_FIELDS}")
+    last = None
+    failed_hosts = 0
+    for host in SPOT_HOSTS:
+        url = f"https://{host}{qs}"
+        host_ok = False
+        for attempt in range(2):
+            try:
+                js = _get_json(url, retries=1)
+                data = js.get("data") or {}
+                if data.get("diff") is not None:
+                    return data
+                last = f"rc={js.get('rc')} data 为空"
+            except Exception as e:  # noqa: BLE001
+                last = e
+            time.sleep(1.5 + 2.5 * attempt)
+        failed_hosts += 1
+        if failed_hosts >= 3:
+            break
+    raise RuntimeError(f"快照第 {pn} 页取不到（{last}）")
 
 def fetch_spot():
     """全 A 股快照（不含北交所）。"""
@@ -192,7 +220,7 @@ def fetch_spot():
     rows = list(first.get("diff") or [])
     pages = list(range(2, total // 100 + 3))
     if pages:
-        with ThreadPoolExecutor(max_workers=8) as ex:
+        with ThreadPoolExecutor(max_workers=(3 if LOW_CONCURRENCY else 6)) as ex:
             for data in ex.map(_spot_page, pages):
                 rows.extend(data.get("diff") or [])
     seen, uniq = set(), []

@@ -108,16 +108,19 @@ def main():
 
     t0 = time.time()
     res = None
-    for attempt in (1, 2):
+    # 东财会按 IP 做短时限流（几十秒到一两分钟），所以失败后等久一点再重试；
+    # 连续三次仍然不行才放弃，保留上一次的数据。
+    for attempt, wait in ((1, 0), (2, 30), (3, 90)):
         try:
             res = run_once(cfg, as_of)
             break
-        except Exception as e:  # 网络抖动重试一次
+        except Exception as e:  # noqa: BLE001
             log(f"第 {attempt} 次运行失败：{e}")
-            traceback.print_exc()
-            if attempt == 2:
+            if attempt == 3:
+                traceback.print_exc()
                 raise SystemExit("筛选失败，保留上一次的数据不做覆盖")
-            time.sleep(20)
+            log(f"等待 {wait}s 后重试…")
+            time.sleep(wait)
 
     rows = []
     for r in res["rows"]:

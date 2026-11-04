@@ -21,6 +21,10 @@ app.py  ←── 15:35 定时任务 / 手动刷新
 | --- | --- | --- |
 | <img src="shots/list.png" width="260"> | <img src="shots/detail.png" width="260"> | <img src="shots/info.png" width="260"> |
 
+> **想在外面（不用电脑、不在家）也能看？** 用云端版：<https://ybl120579.github.io/stock-screener/>，
+> 由 GitHub Actions 每个交易日 15:40 自动跑、GitHub Pages 托管，手机 4G/5G 直接打开。
+> 本文件是「本地版」，见 [CLOUD.md](../CLOUD.md) 了解云端版。
+
 ---
 
 ## 一、三步开始
