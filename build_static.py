@@ -71,8 +71,8 @@ def next_trade_day(after, days):
     return after
 
 
-def run_once(cfg, as_of):
-    return screen.run_screen(cfg, as_of, refresh=True, log=log)
+def run_once(cfg, as_of, cached=False):
+    return screen.run_screen(cfg, as_of, refresh=not cached, log=log)
 
 
 def main():
@@ -81,6 +81,8 @@ def main():
     ap.add_argument("--out", default=os.path.join(HERE, "docs"), help="输出目录")
     ap.add_argument("--schedule", default="15:35", help="展示用的自动更新时间")
     ap.add_argument("--skip-ui", action="store_true", help="只更新数据，不复制前端文件")
+    ap.add_argument("--cached", action="store_true",
+                    help="优先用本地缓存（cache/）出数据，网络不通时也能重建页面")
     ap.add_argument("--if-missing", action="store_true",
                     help="该交易日已有快照就跳过（定时任务用，避免节假日重复跑）")
     args = ap.parse_args()
@@ -112,7 +114,8 @@ def main():
     # 连续三次仍然不行才放弃，保留上一次的数据。
     for attempt, wait in ((1, 0), (2, 30), (3, 90)):
         try:
-            res = run_once(cfg, as_of)
+            ds.reset_throttle()
+            res = run_once(cfg, as_of, cached=args.cached)
             break
         except Exception as e:  # noqa: BLE001
             log(f"第 {attempt} 次运行失败：{e}")

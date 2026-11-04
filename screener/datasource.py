@@ -59,6 +59,8 @@ def _session():
 _PACE_LOCK = threading.Lock()
 _LAST_REQ = [0.0]
 _BLOCK_UNTIL = [0.0]
+_TRIPS = [0]
+MAX_TRIPS = 8          # 一轮里被限流这么多次就放弃，别把 CI 的时间预算耗光
 MIN_INTERVAL = 0.25 if LOW_CONCURRENCY else 0.06
 COOLDOWN = 20.0
 
@@ -81,13 +83,22 @@ def _wait_unblock():
 
 
 def _trip(reason):
+    _TRIPS[0] += 1
     _BLOCK_UNTIL[0] = max(_BLOCK_UNTIL[0], time.time() + COOLDOWN)
     return RuntimeError(f"数据源限流：{reason}")
+
+
+def reset_throttle():
+    """每轮筛选开始前调用，重新给一次机会。"""
+    _TRIPS[0] = 0
+    _BLOCK_UNTIL[0] = 0.0
 
 
 def _get_json(url, timeout=25, retries=3):
     last = None
     for i in range(retries):
+        if _TRIPS[0] >= MAX_TRIPS:
+            raise RuntimeError("数据源持续限流，本轮放弃")
         _wait_unblock()
         _pace()
         try:
