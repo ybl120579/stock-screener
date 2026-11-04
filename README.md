@@ -146,6 +146,9 @@ stock-screener/
 │   ├── ui/                #   前端页面
 │   ├── data/              #   每日快照
 │   └── *.bat              #   启动 / 开机自启 / 防火墙
+├── docs/                  # 云端静态站点（GitHub Pages 发布目录，见 CLOUD.md）
+├── build_static.py        # 跑一次筛选 → 生成 docs/（云端定时任务调用）
+├── tools/deploy_github.py # 一键建仓库 / 推代码 / 开 Pages
 ├── cache/                 # 按交易日缓存（可删）
 └── reports/               # 输出报告
 ```
@@ -155,6 +158,10 @@ stock-screener/
 想每天在手机上直接看名单：双击 `mobile/启动手机App服务.bat`，手机连同一 WiFi 打开
 窗口里打印的地址即可（可「添加到主屏幕」当 App 用），每个交易日 15:35 自动更新。
 详见 [mobile/README.md](mobile/README.md)。
+
+**想在外面也能看、电脑还关着？** 用云端版：GitHub Actions 每天北京时间 15:40 自动跑一次，
+把结果发布成静态网页（GitHub Pages），手机任何网络都能打开。前端是同一套代码，
+启动时自动判断是连本地服务（live）还是读静态文件（static）。部署方式见 [CLOUD.md](CLOUD.md)。
 
 `python verify.py` 会跳过筛选模块，直接从原始接口重算几只票的首板日涨幅、首板前后涨停情况、
 回踩幅度，并用 akshare 独立拉涨停池交叉核对连板数，用来确认报告里的数字没有算错。
