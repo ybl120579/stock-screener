@@ -21,6 +21,14 @@ GitHub Pages（静态托管，7×24 在线）
 
 所以同一个 `index.html` 放在哪里都能跑，不用维护两份。
 
+## 长这样
+
+| 云端名单（4G 打开） | 云端详情（点卡片） |
+| --- | --- |
+| <img src="mobile/shots/cloud-list.png" width="300"> | <img src="mobile/shots/cloud-detail.png" width="300"> |
+
+注意右上角只有「?」——静态版没有刷新按钮，数据由 GitHub Actions 每天更新。
+
 ## 站点结构
 
 ```
