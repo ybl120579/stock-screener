@@ -25,6 +25,9 @@ import shutil
 import sys
 import time
 import traceback
+from datetime import datetime, timedelta, timezone
+
+BJ = timezone(timedelta(hours=8))   # 统一用北京时间（GitHub 的机器是 UTC，本地是 +08）
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -41,7 +44,7 @@ UI_FILES = ["index.html", "style.css", "app.js", "sw.js", "manifest.webmanifest"
 
 
 def log(msg):
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+    print(f"[{datetime.now(BJ):%H:%M:%S}] {msg}", flush=True)
 
 
 def write_json(path, obj, indent=None):
@@ -114,7 +117,7 @@ def main():
         rows.append(s)
 
     meta = res["meta"]
-    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(BJ).strftime("%Y-%m-%d %H:%M:%S")
     payload = {
         "trade_date": as_of,
         "generated_at": now,

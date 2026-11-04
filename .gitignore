@@ -10,3 +10,5 @@ __pycache__/
 docs/_shot.html
 mobile/ui/_shot.html
 mobile/shots/*.raw.png
+
+docs/_shot*.html
