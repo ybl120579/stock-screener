@@ -1,0 +1,12 @@
+# 缓存与生成物
+cache/
+reports/
+mobile/data/
+__pycache__/
+*.pyc
+*.tmp
+
+# 截图脚本的临时页
+docs/_shot.html
+mobile/ui/_shot.html
+mobile/shots/*.raw.png

@@ -1,0 +1,4 @@
+# 云端定时任务只需要这几个包（不用 openpyxl，也不用出 Excel 报告）
+requests>=2.31
+pandas>=2.0
+akshare>=1.12

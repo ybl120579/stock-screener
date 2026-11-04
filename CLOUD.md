@@ -1,0 +1,84 @@
+# 云端版：不用电脑，手机随时随地打开
+
+本地版（`mobile/app.py`）要电脑开着、同一个 WiFi。云端版把「跑筛选」和「看页面」都搬到云上：
+
+```
+GitHub Actions（每天北京时间 15:40 自动跑）
+      │  ① python build_static.py  ← 拉东财数据、跑四条件、算出冷度分
+      │  ② 把结果写进 docs/data/*.json
+      ▼
+GitHub 仓库（自动提交一次）
+      ▼
+GitHub Pages（静态托管，7×24 在线）
+      ▼
+手机浏览器 / 加到主屏的图标     ← 任何网络都能打开，家里电脑可以关着
+```
+
+前端是同一套代码：`ui/app.js` 启动时先探测 `api/status`——
+
+- 探测成功 → **live 模式**，走本地服务（`mobile/app.py`，能手动刷新、能看实时状态）
+- 探测失败 → **static 模式**，改读 `data/list.json` 等静态文件（就是 Pages 上的形态）
+
+所以同一个 `index.html` 放在哪里都能跑，不用维护两份。
+
+## 站点结构
+
+```
+docs/
+├── index.html  style.css  app.js  sw.js  manifest.webmanifest  icon-*.png
+└── data/
+    ├── list.json               最新名单（含 16 只的 60 根 K 线，约 60KB）
+    ├── archive/YYYY-MM-DD.json 每个交易日的完整快照
+    ├── history.json           有哪些日期（页面顶部的日期标签）
+    └── status.json            上次生成时间、下次更新时间
+```
+
+## 每天是怎么更新的
+
+`.github/workflows/daily.yml`：
+
+1. `cron: 40 7 * * 1-5`（UTC 07:40 = 北京时间 15:40，周一到周五）
+2. 装 `requirements-ci.txt`（requests / pandas / akshare）
+3. `python build_static.py --if-missing`——当天已有快照就跳过，节假日不会重复跑
+4. 有变化就 `git commit` + `git push`，Pages 自动重新发布
+
+GitHub 的定时任务偶尔会延迟几分钟到半小时才触发，对**日线**数据没有影响。如果那天 GitHub 完全没跑（平台故障），第二天会照常更新，也可以手动补。
+
+## 第一次部署（一次性）
+
+仓库名随意，例如 `stock-screener`。部署完地址是：
+
+```
+https://<你的用户名>.github.io/stock-screener/
+```
+
+三步：
+
+1. **推代码**（本地已 `git init` 并提交好，见下面的命令）
+2. **开 Pages**：仓库 → Settings → Pages → Source 选 `Deploy from a branch`，分支 `main`、目录 `/docs`，保存
+3. 等 1～2 分钟，打开上面那个地址
+
+## 手动补跑 / 重跑
+
+仓库 → Actions → 「每日选股」→ Run workflow：
+
+- 默认勾选「force」以外的行为：当天已有快照就跳过
+- 勾上 `force`：无视已有快照，强制重跑（适合修了参数想立刻看结果）
+
+## 想改筛选条件
+
+改 `config.json`（阈值、权重都在里面）→ 提交 → 手动 Run workflow（勾 force）。
+
+## 常见问题
+
+**Actions 跑失败了**
+点进那次运行看日志。最常见是数据源临时抽风（东财接口偶发超时），`build_static.py` 内部已经重试一次；再失败就手动 Run 一次。
+
+**Pages 打开是 404**
+Settings → Pages 里确认分支和目录选的是 `main` / `/docs`，且 `docs/index.html` 确实推上去了。
+
+**手机上打开很慢**
+GitHub Pages 走的是海外 CDN，国内访问偶尔慢。可用性一般够用；如果实在慢，把仓库再挂一份到 Cloudflare Pages（同一个 `docs/` 目录，免费），或换成国内静态托管。
+
+**数据要保密吗**
+仓库是公开的，但里面只有公开行情算出来的名单，没有你的账号密钥。你的 API 密钥一个都不在这里（东财接口本身不需要 key）。
