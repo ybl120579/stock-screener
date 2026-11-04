@@ -51,13 +51,58 @@ def _session():
         _thread_local.s = s
     return s
 
+# ---------------------------------------------------------------- 限速与熔断
+# 东财对同一 IP 有突发限流：短时间内几十个请求就会返回 rc=102（data:null）或 502，
+# 而且要等几十秒才恢复。这里做两件事：
+#   1. 全局匀速：每两次请求之间至少隔 MIN_INTERVAL 秒（云端更慢）；
+#   2. 熔断：一旦看到 rc=102/502，全局暂停 COOLDOWN 秒，所有线程一起等，避免越撞越狠。
+_PACE_LOCK = threading.Lock()
+_LAST_REQ = [0.0]
+_BLOCK_UNTIL = [0.0]
+MIN_INTERVAL = 0.25 if LOW_CONCURRENCY else 0.06
+COOLDOWN = 20.0
+
+
+def _pace():
+    with _PACE_LOCK:
+        now = time.time()
+        wait = _LAST_REQ[0] + MIN_INTERVAL - now
+        if wait > 0:
+            time.sleep(wait)
+        _LAST_REQ[0] = time.time()
+
+
+def _wait_unblock():
+    while True:
+        delay = _BLOCK_UNTIL[0] - time.time()
+        if delay <= 0:
+            return
+        time.sleep(min(delay, 5.0))
+
+
+def _trip(reason):
+    _BLOCK_UNTIL[0] = max(_BLOCK_UNTIL[0], time.time() + COOLDOWN)
+    return RuntimeError(f"数据源限流：{reason}")
+
+
 def _get_json(url, timeout=25, retries=3):
     last = None
     for i in range(retries):
+        _wait_unblock()
+        _pace()
         try:
             r = _session().get(url, timeout=timeout)
+            if r.status_code >= 500:
+                last = _trip(f"HTTP {r.status_code}")
+                time.sleep(2.0 * (i + 1))
+                continue
             r.raise_for_status()
-            return r.json()
+            js = r.json()
+            if isinstance(js, dict) and js.get("rc") == 102:
+                last = _trip("rc=102")
+                time.sleep(2.0 * (i + 1))
+                continue
+            return js
         except Exception as e:  # noqa: BLE001
             last = e
             time.sleep(0.6 * (i + 1))
@@ -341,8 +386,10 @@ def fetch_fund_flow():
 
 # ------------------------------------------------------------------ 批量 K 线
 
-def get_klines(codes, trade_date: str, lmt: int = 160, refresh: bool = False, workers: int = 8):
+def get_klines(codes, trade_date: str, lmt: int = 160, refresh: bool = False, workers: int = None):
     """批量获取（带缓存）日K，返回 {code: DataFrame}。"""
+    if workers is None:
+        workers = 4 if LOW_CONCURRENCY else 8
     key = f"klines_{trade_date}_{lmt}"
     p = _cache_path("klines", key)
     store = {}
@@ -355,6 +402,8 @@ def get_klines(codes, trade_date: str, lmt: int = 160, refresh: bool = False, wo
     todo = [c for c in codes if store.get(c) is None]
     if todo:
         def _one(c):
+            if LOW_CONCURRENCY:
+                time.sleep(0.12)   # 云机房 IP 下给东财留点余量，避免触发限流
             return c, fetch_kline(c, lmt)
         with ThreadPoolExecutor(max_workers=workers) as ex:
             for c, df in ex.map(_one, todo):

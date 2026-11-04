@@ -122,6 +122,13 @@ def main():
             log(f"等待 {wait}s 后重试…")
             time.sleep(wait)
 
+    # 数据源被限流时 K 线会大面积失败，筛选结果会变成空集 —— 这种“假空结果”
+    # 绝不能覆盖当天已经正确的快照，宁可重试。
+    meta0 = res["meta"]
+    kt, ko = meta0.get("kline_total") or 0, meta0.get("kline_ok") or 0
+    if kt >= 50 and ko < kt * 0.5:
+        raise RuntimeError(f"K线抓取大面积失败（{ko}/{kt}），疑似限流")
+
     rows = []
     for r in res["rows"]:
         s = mobile_app._slim(r)
