@@ -56,6 +56,18 @@ def write_json(path, obj, indent=None):
     os.replace(tmp, path)
 
 
+def kline_guard(meta, ratio=0.5, min_total=50):
+    """数据源被限流时 K 线会大面积失败，筛选结果会变成空集。
+
+    这种“假空结果”绝不能覆盖当天已经正确的快照，宁可重试。
+    """
+    kt = (meta or {}).get("kline_total") or 0
+    ko = (meta or {}).get("kline_ok") or 0
+    if kt >= min_total and ko < kt * ratio:
+        raise RuntimeError(f"K线抓取大面积失败（{ko}/{kt}），疑似限流")
+    return True
+
+
 def next_trade_day(after, days):
     """交易日历只到当天，往后按工作日顺延（节假日由当天自动更新纠正）。"""
     for d in days:
@@ -116,6 +128,7 @@ def main():
         try:
             ds.reset_throttle()
             res = run_once(cfg, as_of, cached=args.cached)
+            kline_guard(res.get("meta"))      # 假空结果 → 当作失败，进入下一次重试
             break
         except Exception as e:  # noqa: BLE001
             log(f"第 {attempt} 次运行失败：{e}")
@@ -124,13 +137,6 @@ def main():
                 raise SystemExit("筛选失败，保留上一次的数据不做覆盖")
             log(f"等待 {wait}s 后重试…")
             time.sleep(wait)
-
-    # 数据源被限流时 K 线会大面积失败，筛选结果会变成空集 —— 这种“假空结果”
-    # 绝不能覆盖当天已经正确的快照，宁可重试。
-    meta0 = res["meta"]
-    kt, ko = meta0.get("kline_total") or 0, meta0.get("kline_ok") or 0
-    if kt >= 50 and ko < kt * 0.5:
-        raise RuntimeError(f"K线抓取大面积失败（{ko}/{kt}），疑似限流")
 
     rows = []
     for r in res["rows"]:
@@ -167,6 +173,12 @@ def main():
 
     out = args.out
     data_dir = os.path.join(out, "data")
+    # 历史快照只留最近 120 个交易日，避免仓库无限长胖
+    arch_dir = os.path.join(data_dir, "archive")
+    if os.path.isdir(arch_dir):
+        old_files = sorted(f for f in os.listdir(arch_dir) if f.endswith(".json"))
+        for f in old_files[:-120]:
+            os.remove(os.path.join(arch_dir, f))
     write_json(os.path.join(data_dir, "archive", f"{as_of}.json"), payload)
     write_json(os.path.join(data_dir, "list.json"), payload)
 
