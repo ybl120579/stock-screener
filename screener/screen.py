@@ -141,13 +141,13 @@ def run_screen(cfg, as_of=None, refresh=False, log=print):
                 continue
             reached[1] += 1
             if cfg["exclude_st"] and is_st_name(name):
-                rejects.append((1, code, name, d, "ST"))
+                rejects.append((2, code, name, d, "ST"))
                 continue
             if is_new_name(name):
-                rejects.append((1, code, name, d, "次新股"))
+                rejects.append((2, code, name, d, "次新股"))
                 continue
             if x["lbc"] != 1:
-                rejects.append((1, code, name, d, f"{x['lbc']}连板"))
+                rejects.append((2, code, name, d, f"{x['lbc']}连板，不是首板"))
                 continue
             reached[2] += 1
             records.append({**x, "board_date": d})
