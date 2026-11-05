@@ -83,8 +83,9 @@ class TestEvaluate(unittest.TestCase):
         return rec, kl
 
     def run_eval(self, rec, kl):
-        return sc._evaluate(rec, kl, self.T, self.days, self.cfg, self.spot,
-                            None, None, {}, None)
+        stage, row, _why = sc._evaluate(rec, kl, self.T, self.days, self.cfg, self.spot,
+                                        None, None, {}, None)
+        return stage, row
 
     def test_pass_and_pullback(self):
         # 首板后一路回落到首板前收盘价附近 → 应通过到第 9 阶段
@@ -92,6 +93,34 @@ class TestEvaluate(unittest.TestCase):
         stage, row = self.run_eval(rec, kl)
         self.assertEqual(stage, 9, row)
         self.assertIn(row["hit_type"], ("平台", "开盘价"))
+
+    def run_full(self, rec, kl, cfg=None):
+        return sc._evaluate(rec, kl, self.T, self.days, cfg or self.cfg, self.spot,
+                            None, None, {}, None)
+
+    def test_break_dip_rejected(self):
+        # 首板后先深跌到首板前收盘下方 7%，再反抽回左侧 → 打开 break_dip_pct 后应被剔除
+        rec, kl = self.build([-8.0, -8.0, 7.4])
+        cfg = dict(self.cfg); cfg["break_dip_pct"] = 6.0
+        stage, row, why = self.run_full(rec, kl, cfg)
+        self.assertEqual(stage, 7, (stage, why))
+        self.assertIn("破位", why)
+
+    def test_break_dip_off_by_default(self):
+        # 默认配置下 break_dip_pct=0（关闭）：同样的形态应当通过
+        rec, kl = self.build([-8.0, -8.0, 7.4])
+        self.assertEqual(self.cfg["break_dip_pct"], 0.0)
+        stage, row, why = self.run_full(rec, kl)
+        self.assertEqual(stage, 9, (stage, why))
+
+    def test_reason_strings_not_empty(self):
+        # 每个阶段的剔除都必须给出人话原因（手机端要显示）
+        rec, kl = self.build([-1.0] * 10)
+        i = self.days.index(rec["board_date"]) - 5
+        kl.loc[i, "pct"] = 10.0
+        stage, _row, why = self.run_full(rec, kl)
+        self.assertEqual(stage, 4)
+        self.assertTrue(why and "首板前" in why, why)
 
     def test_prior_limit_up_rejected(self):
         rec, kl = self.build([-1.0] * 10)
@@ -172,3 +201,33 @@ class TestConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestDecay(unittest.TestCase):
+    """首板天数衰减：越久扣越多，且有上下界。"""
+
+    def setUp(self):
+        self.cfg = cfgmod.load_config()
+
+    def test_bounds_and_monotonic(self):
+        vals = [sc._decay(d, self.cfg) for d in range(1, 11)]
+        self.assertEqual(vals[0], 0.0)          # days_since=1 不扣
+        self.assertEqual(vals[1], 0.0)          # days_since=2 不扣
+        self.assertEqual(vals[-1], self.cfg["time_decay_max"])
+        self.assertEqual(vals, sorted(vals))     # 单调不减
+        for v in vals:
+            self.assertGreaterEqual(v, 0.0)
+            self.assertLessEqual(v, self.cfg["time_decay_max"])
+
+    def test_zero_when_disabled(self):
+        cfg = dict(self.cfg); cfg["time_decay_max"] = 0
+        self.assertTrue(all(sc._decay(d, cfg) == 0.0 for d in range(1, 11)))
+
+    def test_score_reflects_decay(self):
+        row = {"score_parts": {"turnover_today": 100.0}, "lhb_after_cnt": 0,
+               "days_since": 1, "decay_penalty": 0.0}
+        s_fresh = sc._score(row, self.cfg)
+        row2 = dict(row, days_since=10,
+                    decay_penalty=sc._decay(10, self.cfg))
+        s_stale = sc._score(row2, self.cfg)
+        self.assertAlmostEqual(s_fresh - s_stale, self.cfg["time_decay_max"], places=1)

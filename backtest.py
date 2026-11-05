@@ -117,9 +117,23 @@ def main():
     ap.add_argument("--start", help="起始日 YYYY-MM-DD（优先于 --days）")
     ap.add_argument("--refresh", action="store_true", help="重建 K 线缓存")
     ap.add_argument("--out", default=os.path.join(HERE, "reports"))
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                    help="临时覆盖 config 里的参数，可重复，如 --set break_dip_pct=0")
+    ap.add_argument("--tag", default="", help="输出文件名后缀，方便对比")
     args = ap.parse_args()
 
     cfg = cfgmod.load_config()
+    for kv in args.set:
+        k, _, v = kv.partition("=")
+        k = k.strip()
+        if not k:
+            continue
+        try:
+            val = json.loads(v)
+        except Exception:  # noqa: BLE001
+            val = v
+        cfg[k] = val
+        print(f"[cfg] {k} = {val!r}")
     alldays = ds.get_trade_days(lmt=400)          # 用来算“距首板几天”
     if args.start:
         days = [d for d in alldays if d >= args.start][:args.days]
@@ -179,8 +193,8 @@ def main():
                 fr = forward_returns(df, i)
                 # 基准组：窗口内的所有首板股（不加条件二/四）
                 cand.append({"code": code, "name": rec["name"], **fr})
-                stage, row = sc._evaluate(rec, sub, d, alldays, cfg, spot,
-                                          None, None, {}, None)
+                stage, row, _why = sc._evaluate(rec, sub, d, alldays, cfg, spot,
+                                                None, None, {}, None)
                 if row is not None:
                     row["score_parts"] = sc._score_parts(row)
                     row["score"] = sc._score(row, cfg)
@@ -224,7 +238,8 @@ def main():
 
     report = summarize(daily, all_picks)
     os.makedirs(args.out, exist_ok=True)
-    path = os.path.join(args.out, f"backtest_{len(days)}d.json")
+    tag = f"_{args.tag}" if getattr(args, "tag", "") else ""
+    path = os.path.join(args.out, f"backtest_{len(days)}d{tag}.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"daily": daily, "summary": report,
                    "picks": all_picks}, f, ensure_ascii=False, indent=1,

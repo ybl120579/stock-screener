@@ -95,7 +95,7 @@ def _slim(r):
         "today_turnover", "turnover5", "amount_yi", "vol_ratio_board",
         "float_mcap_yi", "gain60_pct", "price", "holder_avg_wan",
         "holder_chg_pct", "holder_stat_date", "retail_pct", "hot_rank",
-        "lhb_on_board", "lhb_after_cnt", "score", "score_parts",
+        "lhb_on_board", "lhb_after_cnt", "score", "score_parts", "decay_penalty",
     ]
     out = {k: r.get(k) for k in keys}
     out["spark"] = spark
@@ -134,6 +134,7 @@ def build_snapshot(as_of=None, refresh=False):
         "spot_source": meta.get("spot_source"),
             "params": meta.get("params"),
             "weights": meta.get("weights"),
+            "rejects": meta.get("rejects") or [],
             "rows": [_slim(r) for r in rows],
         }
         tmp = snapshot_path(day) + ".tmp"

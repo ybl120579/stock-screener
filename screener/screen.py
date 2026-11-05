@@ -137,7 +137,7 @@ def run_screen(cfg, as_of=None, refresh=False, log=print):
             code, name = x["code"], x["name"]
             reached[0] += 1
             if not is_main_board(code):
-                rejects.append((0, code, name, d, "非主板"))
+                rejects.append((1, code, name, d, "非主板（创业板/科创板/北交所）"))
                 continue
             reached[1] += 1
             if cfg["exclude_st"] and is_st_name(name):
@@ -166,13 +166,13 @@ def run_screen(cfg, as_of=None, refresh=False, log=print):
 
     rows = []
     for rec in records:
-        stage, row = _evaluate(rec, klines.get(rec["code"]), T, days, cfg,
-                               spot, gdhs, hotrank, lhb_after, fundflow)
+        stage, row, why = _evaluate(rec, klines.get(rec["code"]), T, days, cfg,
+                                    spot, gdhs, hotrank, lhb_after, fundflow)
         for k in range(3, stage):
             reached[k] += 1
         if row is None:
             rejects.append((stage, rec["code"], rec["name"], rec["board_date"],
-                            FUNNEL_STAGES[stage] if stage < len(FUNNEL_STAGES) else "未知"))
+                            why or (FUNNEL_STAGES[stage] if stage < len(FUNNEL_STAGES) else "未知")))
         else:
             rows.append(row)
 
@@ -218,17 +218,17 @@ def run_screen(cfg, as_of=None, refresh=False, log=print):
 
 
 def _evaluate(rec, kl, T, days, cfg, spot, gdhs, hotrank, lhb_after, fundflow):
-    """返回 (通过阶段数, row)。阶段数：3=K线 4=首板前 5=首板后 6=窗口 7=回踩 8=热度 9=全通过"""
+    """返回 (阶段, row, 原因)。阶段：3=K线 4=首板前 5=首板后 6=窗口 7=回踩 8=热度 9=全通过"""
     code, name, d = rec["code"], rec["name"], rec["board_date"]
 
     if kl is None or len(kl) < cfg["min_bars"]:
-        return 3, None
+        return 3, None, "K线不足"
     dates = kl["date"].tolist()
     if dates[-1] != T or d not in dates:
-        return 3, None
+        return 3, None, "K线未更新到今日"
     j = dates.index(d)
     if j < cfg["first_board_lookback_days"]:
-        return 3, None
+        return 3, None, "上市时间太短"
 
     o = kl["open"].to_numpy(float)
     c = kl["close"].to_numpy(float)
@@ -243,13 +243,13 @@ def _evaluate(rec, kl, T, days, cfg, spot, gdhs, hotrank, lhb_after, fundflow):
     lim = cfg["limit_up_pct"]
     look = cfg["first_board_lookback_days"]
     if pct[j] < lim or np.any(pct[j - look:j] >= lim):
-        return 4, None
+        return 4, None, "首板前30日已有涨停（非真首板）"
     if np.any(pct[j + 1:] >= lim):
-        return 5, None
+        return 5, None, "首板之后又涨停了"
 
     days_since = days.index(T) - days.index(d)
     if not (1 <= days_since <= cfg["board_window_days"]):
-        return 6, None
+        return 6, None, f"首板距今 {days_since} 天，超出 1–{cfg['board_window_days']} 天窗口"
 
     pre_close = c[j - 1]
     board_close = c[j]
@@ -257,14 +257,21 @@ def _evaluate(rec, kl, T, days, cfg, spot, gdhs, hotrank, lhb_after, fundflow):
     close_T = c[-1]
     retrace = close_T / board_close - 1.0
     if retrace > -cfg["pullback_min_pct"] / 100.0:
-        return 7, None
+        return 7, None, f"从首板收盘只回落 {abs(retrace)*100:.1f}%，不够 {cfg['pullback_min_pct']}%"
 
     left_dev = close_T / pre_close - 1.0
+    # 破位风险：首板之后若有收盘跌破「首板前收盘 - break_dip_pct%」，形态已被破坏过
+    dip = cfg.get("break_dip_pct", 0) or 0
+    if dip > 0:
+        after = c[j + 1:]
+        if len(after) and float(after.min()) < pre_close * (1.0 - dip / 100.0):
+            worst = (float(after.min()) / pre_close - 1.0) * 100
+            return 7, None, f"首板后最深跌到左侧 {worst:.1f}%（破位过），属于破位后反抽"
     tol = cfg["left_tolerance_pct"] / 100.0
     hit_platform = abs(left_dev) <= tol
     hit_open = (board_open > pre_close * 1.02) and abs(close_T / board_open - 1.0) <= 0.015
     if not (hit_platform or hit_open):
-        return 7, None
+        return 7, None, f"没回到左侧：现价比首板前收盘 {left_dev*100:+.1f}%（要求 ±{cfg['left_tolerance_pct']}%）"
 
     sp = spot.loc[code] if code in spot.index else None
     price = close_T
@@ -273,9 +280,9 @@ def _evaluate(rec, kl, T, days, cfg, spot, gdhs, hotrank, lhb_after, fundflow):
         float_mcap = rec.get("float_mcap")
     float_mcap_yi = float_mcap / 1e8 if float_mcap else None
     if price < cfg["price_min"]:
-        return 8, None
+        return 8, None, f"股价 {price:.2f} 元低于 {cfg['price_min']} 元"
     if float_mcap_yi is None or not (cfg["float_mcap_min_yi"] <= float_mcap_yi <= cfg["float_mcap_max_yi"]):
-        return 8, None
+        return 8, None, f"流通市值 {float_mcap_yi or 0:.0f} 亿不在 {cfg['float_mcap_min_yi']:.0f}–{cfg['float_mcap_max_yi']:.0f} 亿"
 
     base = c[-61] if n > 60 else c[0]
     gain60 = (close_T / base - 1.0) * 100 if base > 0 else None
@@ -289,15 +296,15 @@ def _evaluate(rec, kl, T, days, cfg, spot, gdhs, hotrank, lhb_after, fundflow):
     if hotrank is not None and code in hotrank.index:
         hot_rank = int(hotrank.loc[code, "rank"])
     if cfg["exclude_hot_rank_top"] and hot_rank is not None and hot_rank <= cfg["exclude_hot_rank_top"]:
-        return 8, None
+        return 8, None, f"东财人气榜第 {hot_rank} 名，热度太高"
     if turnover_today > cfg["turnover_today_max"]:
-        return 8, None
+        return 8, None, f"今日换手 {turnover_today:.1f}% 超过 {cfg['turnover_today_max']}%"
     if turnover5 > cfg["turnover_5d_max"]:
-        return 8, None
+        return 8, None, f"5日均换手 {turnover5:.1f}% 超过 {cfg['turnover_5d_max']}%"
     if amount_yi > cfg["amount_today_max_yi"]:
-        return 8, None
+        return 8, None, f"今日成交额 {amount_yi:.1f} 亿超过 {cfg['amount_today_max_yi']:.0f} 亿"
     if gain60 is not None and gain60 > cfg["gain60_max_pct"]:
-        return 8, None
+        return 8, None, f"60日涨幅 {gain60:.0f}% 超过 {cfg['gain60_max_pct']:.0f}%"
 
     holder_avg_wan = holder_chg = holder_stat = None
     if gdhs is not None and code in gdhs.index:
@@ -346,9 +353,10 @@ def _evaluate(rec, kl, T, days, cfg, spot, gdhs, hotrank, lhb_after, fundflow):
         "hot_rank": hot_rank,
         "lhb_on_board": bool(d in set(lhb_days)),
         "lhb_after_cnt": int(lhb_after_cnt),
+        "decay_penalty": _decay(days_since, cfg),
         "chart": _chart_payload(kl, j, pre_close, 60),
     }
-    return 9, row
+    return 9, row, ""
 
 
 def _chart_payload(kl, j, left_ref, n_bars=60):
@@ -382,9 +390,21 @@ def _score_parts(r):
     }
 
 
+def _decay(days_since, cfg):
+    """首板距今天数越久，形态越容易走坏 → 扣分（0 ~ time_decay_max）。"""
+    mx = float(cfg.get("time_decay_max", 0) or 0)
+    if mx <= 0:
+        return 0.0
+    start = float(cfg.get("time_decay_start_days", 2))
+    span = max(1.0, float(cfg.get("board_window_days", 10)) - start)
+    frac = (days_since - start) / span
+    return round(mx * min(1.0, max(0.0, frac)), 1)
+
+
 def _score(r, cfg):
     w = cfg["weights"]
     parts = r["score_parts"]
     total = sum(parts[k] * w.get(k, 0.0) for k in parts)
     total -= cfg["lhb_after_penalty"] * min(r.get("lhb_after_cnt", 0), 2)
+    total -= r.get("decay_penalty") or 0.0
     return round(max(0.0, min(100.0, total)), 1)

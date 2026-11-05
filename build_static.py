@@ -154,6 +154,7 @@ def main():
         "spot_source": meta.get("spot_source"),
         "params": meta.get("params"),
         "weights": meta.get("weights"),
+        "rejects": meta.get("rejects") or [],
         "rows": rows,
     }
     log(f"{as_of} 筛出 {len(rows)} 只，用时 {payload['elapsed_sec']}s")

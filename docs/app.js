@@ -428,6 +428,9 @@ async function openSheet(code) {
           <span class="track"><span class="fill" style="width:${Math.max(0, Math.min(100, v))}%"></span></span>
           <span class="s">${num(v, 0)} ·${num(v * w, 1)}</span></div>`;
       }).join('')}
+      ${(row.decay_penalty || 0) > 0 ? `<div class="row"><span class="n">首板天数衰减</span>
+        <span class="track"><span class="fill" style="width:0%"></span></span>
+        <span class="s" style="color:#f5a524">−${num(row.decay_penalty, 1)}</span></div>` : ''}
       ${row.lhb_after_cnt ? `<div class="row"><span class="n">首板后龙虎榜</span>
         <span class="track"><span class="fill" style="width:0%"></span></span>
         <span class="s" style="color:#f5a524">-${row.lhb_after_cnt * (S.snap.params.lhb_after_penalty || 20)}</span></div>` : ''}
@@ -485,8 +488,32 @@ function openFunnel() {
        右边 <i class="cut">−N</i> 是被这一层去掉的数量。</p>
     ${rows}
     ${auxNote(d)}
+    <h4>查一只股票为什么没入选</h4>
+    <p class="dim">输入代码或名称，看看它卡在第几层。</p>
+    <input id="whyq" class="q" placeholder="如 300750 / 宁德时代" autocomplete="off">
+    <div id="whyout" class="whyout"></div>
     <p class="dim">只做形态与热度过滤，不含任何未来信息；数据来自公开行情接口。</p>
   </div>`;
+  const inp = $('#whyq'), out = $('#whyout');
+  const REJ = d.rejects || [];
+  const render = () => {
+    const q = (inp.value || '').trim().toUpperCase();
+    if (!q) { out.innerHTML = ''; return; }
+    const hits = REJ.filter(r => (r.code || '').includes(q) ||
+      (r.name || '').toUpperCase().includes(q)).slice(0, 8);
+    out.innerHTML = hits.length ? hits.map(r => {
+      return `<div class="whyrow"><div class="whytop"><b>${esc(r.name)}</b><span>${r.code}</span>
+        <i class="st">卡在「${esc(r.stage)}」</i></div>
+        <div class="whybd">首板 ${r.board_date} · ${esc(r.reason)}</div></div>`;
+    }).join('') : ((p => p
+      ? `<div class="whyrow"><div class="whytop"><b>${esc(p.name)}</b><span>${p.code}</span>
+          <i class="st ok">已入选 · 第 ${(S.rows || []).indexOf(p) + 1} 名</i></div>
+          <div class="whybd">冷度分 ${num(p.score, 1)} · 首板 ${p.board_date} · 距 ${p.days_since} 天 · ${esc(p.hit_type)}命中</div></div>`
+      : '<p class="dim">没有找到这条记录（可能不在最近一次筛选的涨停池里）。</p>')(
+        (S.rows || []).find(r => (r.code || '').includes(q) || (r.name || '').toUpperCase().includes(q))));
+  };
+  inp.oninput = render;
+  if (!REJ.length) { inp.disabled = true; inp.placeholder = '本次数据没有带上剔除明细'; }
 }
 
 function openInfo() {
@@ -502,6 +529,10 @@ function openInfo() {
     <p>首板是右侧的启动，<b>首板前一天的收盘价</b>就是左侧平台的位置。今天收盘价要
        <b>从首板最高点回落 3% 以上</b>，且回到首板前收盘价 <b>±3.5%</b> 以内（平台命中）；
        首板当天大幅高开的，回到首板开盘价 ±1.5% 也算（开盘价命中）。</p>
+    <p class="dim">另有一个可选的「破位」过滤（<b>默认关闭</b>）：如果首板之后收盘曾跌破
+       首板前收盘价 6% 以上，说明平台已经被砸穿过，再回到左侧就要小心是破位反抽。
+       20 天回测里打开它反而略差，所以没开；想更保守可以在 config.json 里把
+       <b>break_dip_pct</b> 设成 6。</p>
     <h4>条件三：只留主板、去掉 ST</h4>
     <p>保留 600 / 601 / 603 / 605 / 000 / 001 / 002 / 003 开头，剔除 ST、*ST、退市整理、
        名称带 <b>N/C</b> 的新股（K 线不足 45 根的也自动剔除），以及股价 &lt; 2 元的仙股。</p>
@@ -509,7 +540,8 @@ function openInfo() {
     <p>先硬过滤：今日换手 ≤10%、5 日均换手 ≤12%、成交额 ≤20 亿、60 日涨幅 ≤60%、
        流通市值 10–1500 亿，并剔除东财人气榜前 100。<br>
        再算「<b>冷度分</b>」（0–100，越高越冷）：今日换手 20%、5 日均换手 15%、
-       户均持股市值 20%、股东户数变化 10%、较首板缩量 12%、成交额 8%、60 日涨幅 8%、小单净流入 7%。</p>
+       户均持股市值 20%、股东户数变化 10%、较首板缩量 12%、成交额 8%、60 日涨幅 8%、小单净流入 7%；
+       首板距今天数超过 2 天后，每多一天再扣一点（最多 −4 分），因为放得越久形态越容易走坏。</p>
     <h4>数据与更新</h4>
     <p>数据来自公开行情接口：行情快照、涨停池、K 线以<b>东方财富</b>为主，
        被限流时自动切<b>新浪行情</b>（快照）与<b>腾讯行情</b>（K 线），涨停池还会回退到仓库里的历史快照，

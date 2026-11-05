@@ -71,6 +71,13 @@ function getJSON(url) {
       { expression: `document.querySelectorAll(${JSON.stringify(SEL)}).length`, returnByValue: true }, sessionId);
     if (r.result && r.result.result && r.result.result.value > 0) { ok = true; break; }
   }
+  // 可选：先执行一段页面脚本（例如填入查询框、点开某个 sheet）
+  const EVAL = opt('eval');
+  if (EVAL) {
+    const dec = decodeURIComponent(EVAL);
+    await send('Runtime.evaluate', { expression: dec, returnByValue: true }, sessionId);
+    await sleep(600);
+  }
   await sleep(700);
   const info = await send('Runtime.evaluate', {
     expression: `JSON.stringify({w:innerWidth,h:innerHeight,cards:document.querySelectorAll('.card').length,
