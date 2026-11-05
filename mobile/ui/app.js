@@ -122,6 +122,7 @@ async function load(showSkeleton = true) {
     renderAll();
     loadHistory();
     loadStatus();
+    loadErrorInfo();
     openFromHash();
   } catch (e) {
     const cached = localStorage.getItem('snap:' + (S.date || localStorage.getItem('snap:last')));
@@ -158,6 +159,21 @@ function renderStatus(st) {
   renderRenew();
 }
 
+function ymdLocal(d = new Date()) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/* 工作日 16 点后，如果最新数据还不是今天的，就认为今天没更新成功 */
+function isStale() {
+  const snap = S.snap; if (!snap || !snap.trade_date) return false;
+  const now = new Date();
+  const wd = now.getDay();
+  if (wd === 0 || wd === 6) return false;
+  if (now.getHours() < 16) return false;
+  return snap.trade_date < ymdLocal(now);
+}
+
 function renderRenew() {
   const el = $('#renew'); if (!el) return;
   const st = S.status;
@@ -169,11 +185,19 @@ function renderRenew() {
   } else if (st && st.running) {
     dot = 'dot warn';
     bits.push('正在重新筛选…' + (st.last_stage ? '（' + st.last_stage + '）' : ''));
+  } else if (isStale()) {
+    dot = 'dot bad';
+    bits.push('今天还没更新成功 · 数据仍是 ' + S.snap.trade_date.slice(5));
+    if (st && st.last_run) bits.push('上次成功 ' + st.last_run.slice(5, 16));
   } else {
-    bits.push('每交易日 ' + (st && st.schedule ? st.schedule : '15:35') + ' 自动更新');
+    bits.push('每交易日 ' + (st && st.schedule ? st.schedule : '15:40') + ' 起自动更新');
     if (st && st.next_run) bits.push('下次 ' + st.next_run.slice(5));
     else if (S.snap) bits.push('下次开盘日');
-    if (st && st.last_error) { dot = 'dot warn'; bits.push('上次失败'); }
+    if (st && st.last_error) { dot = 'dot warn'; bits.push('上次更新失败'); }
+  }
+  if (S.err && S.err.time && !isStale()) {
+    dot = 'dot bad';
+    bits.push('任务失败：' + String(S.err.reason || '').slice(0, 40));
   }
   el.innerHTML = `<span class="${dot}"></span><span>${esc(bits.join(' · '))}</span>`;
 }
@@ -187,10 +211,10 @@ function renderStats() {
   const board = f['首板(1连板)'] ?? vals[2] ?? '—';
   const left = f['已回落到首板左侧'] ?? '—';
   $('#stats').innerHTML = `
-    <div class="stat"><b>${d.count}</b><span>入选</span></div>
-    <div class="stat"><b>${board}</b><span>真首板</span></div>
-    <div class="stat"><b>${left}</b><span>回踩到位</span></div>
-    <div class="stat"><b>${n0}</b><span>涨停池</span></div>`;
+    <div class="stat" data-funnel="1"><b>${d.count}</b><span>入选</span></div>
+    <div class="stat" data-funnel="1"><b>${board}</b><span>真首板</span></div>
+    <div class="stat" data-funnel="1"><b>${left}</b><span>回踩到位</span></div>
+    <div class="stat" data-funnel="1"><b>${n0}</b><span>涨停池</span></div>`;
   const sub = `数据日期 ${d.trade_date} · ${d.generated_at.slice(11, 16)} 生成`
     + (S.offline ? ' · 离线' : '') + (d.elapsed_sec ? ` · ${d.elapsed_sec}s` : '');
   $('#sub').textContent = sub;
@@ -313,6 +337,16 @@ async function loadStatus() {
   try { renderStatus(await api('/api/status', { timeout: 6000 })); } catch (e) { renderRenew(); }
 }
 
+/* 云端任务失败时构建脚本会写 data/last_error.json（成功则删除） */
+async function loadErrorInfo() {
+  try {
+    S.err = await getJSON(BASE + 'data/last_error.json', 5000);
+  } catch (e) {
+    S.err = null;
+  }
+  renderRenew();
+}
+
 /* ---------------- 历史日期 ---------------- */
 async function loadHistory() {
   try {
@@ -401,6 +435,48 @@ async function openSheet(code) {
     <div class="foot">左偏 = 现价 / 首板前收盘 − 1，越接近 0 说明越贴近首板起涨平台。</div>`;
 
   requestAnimationFrame(() => drawK($('#kc'), chart, row));
+}
+
+const FUNNEL_HINT = {
+  '涨停池记录': '近 11 个交易日全部涨停记录（含连板、含各类板块）',
+  '主板·非ST·非次新': '去掉创业板 / 科创板 / 北交所、ST 与 N/C 次新',
+  '首板(1连板)': '当天是第一次涨停（连板数 = 1）',
+  'K线数据充足': '至少有 45 根历史 K 线，够算回踩与均量',
+  '首板前无涨停': '再往前 30 个交易日也没有涨停 —— 确认是「真首板」',
+  '首板后无再涨停': '首板之后没有继续涨停，形态还在回落区间',
+  '首板在时间窗口内': '首板距今 1–10 个交易日',
+  '已回落到首板左侧': '从首板高点回落 ≥3%，且回到左侧（首板前收盘价）±3.5% 内',
+  '热度/市值硬过滤': '换手、成交额、60 日涨幅、流通市值、人气榜前 100',
+  '最终入选': '通过全部条件，按冷度分排序',
+};
+
+function openFunnel() {
+  const d = S.snap; if (!d) return;
+  const f = d.funnel || {};
+  const keys = Object.keys(f);
+  const top = keys.length ? f[keys[0]] : 0;
+  const rows = keys.map((k, i) => {
+    const v = f[k];
+    const prev = i === 0 ? v : f[keys[i - 1]];
+    const cut = i === 0 ? '' : (prev - v > 0
+      ? `<i class="cut">−${prev - v}</i>` : '<i class="cut zero">—</i>');
+    const pct = top ? (100 * v / top) : 0;
+    return `<div class="wide frow">
+      <div class="ftop"><span class="fname">${k}</span>${cut}<b class="fval">${v}</b></div>
+      <div class="fbar"><i style="width:${Math.max(1.5, pct)}%"></i></div>
+      <div class="fhint">${FUNNEL_HINT[k] || ''}</div>
+    </div>`;
+  }).join('');
+  const sh = $('#sheet');
+  sh.classList.add('on');
+  document.body.style.overflow = 'hidden';
+  $('#phead').innerHTML = `<div class="bar"></div><h2>筛选漏斗<span>${d.trade_date} · 逐步收敛</span></h2>`;
+  $('#pbody').innerHTML = `<div class="info">
+    <p>从 ${top} 条涨停记录里，一层层筛到 <b>${d.count}</b> 只。左边数字是「这一层还剩多少」，
+       右边 <i class="cut">−N</i> 是被这一层去掉的数量。</p>
+    ${rows}
+    <p class="dim">只做形态与热度过滤，不含任何未来信息；数据来自公开行情接口。</p>
+  </div>`;
 }
 
 function openInfo() {
@@ -575,6 +651,8 @@ function bind() {
   $('#sheet .mask').addEventListener('click', closeSheet);
 
   document.addEventListener('click', e => {
+    if (e.target.closest('#stats [data-funnel]')) { openFunnel(); return; }
+
     const card = e.target.closest('.card');
     if (card) openSheet(card.dataset.code);
 
@@ -619,6 +697,7 @@ function openFromHash() {
   else {
     const sp = new URLSearchParams(location.search);
     if (sp.has('info')) { openInfo(); return; }
+    if (sp.has('funnel')) { openFunnel(); return; }
     const q = sp.get('open');
     if (q && S.rows.some(r => r.code === q)) openSheet(q);
   }

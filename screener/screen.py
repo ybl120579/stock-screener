@@ -98,8 +98,23 @@ def run_screen(cfg, as_of=None, refresh=False, log=print):
     window_days = days[max(0, iT - n_days): iT + 1]
     pools = {}
     for d in window_days:
-        pools[d] = ds.cached("pool", f"pool_{d}", lambda d=d: ds.fetch_zt_pool(d),
-                             refresh and d == T)
+        def _fetch(d=d):
+            try:
+                got = ds.fetch_zt_pool(d)
+                if got:
+                    return got
+            except Exception as e:  # noqa: BLE001
+                log(f"[warn] {d} 涨停池接口失败：{str(e)[:60]}")
+            snap = ds.fetch_zt_pool_cached_file(d)
+            if snap:
+                log(f"[warn] {d} 涨停池改用仓库快照（{len(snap)} 条）")
+                return snap
+            if d == T:
+                log(f"[warn] {d} 涨停池按行情快照反推（仅当日，连板数按 1 记）")
+                return ds.fetch_zt_pool_fallback(spot)
+            log(f"[warn] {d} 涨停池缺失，跳过该日")
+            return []
+        pools[d] = ds.cached("pool", f"pool_{d}", _fetch, refresh and d == T)
 
     # ---------- 龙虎榜（覆盖整个窗口） ----------
     lhb = None
@@ -301,7 +316,7 @@ def _evaluate(rec, kl, T, days, cfg, spot, gdhs, hotrank, lhb_after, fundflow):
         "board_amount_yi": round(float(amt[j]) / 1e8, 2),
         "board_seal_yi": round(rec["seal_fund"] / 1e8, 2),
         "seal_ratio_pct": round(rec["seal_fund"] / rec["float_mcap"] * 100, 2) if rec.get("float_mcap") else None,
-        "board_first_time": f"{rec['first_time']:06d}",
+        "board_first_time": (f"{rec['first_time']:06d}" if rec.get("first_time") else ""),
         "pre_close": round(float(pre_close), 2),
         "board_close": round(float(board_close), 2),
         "board_open": round(float(board_open), 2),

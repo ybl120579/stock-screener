@@ -185,7 +185,7 @@ def fetch_kline(code: str, lmt: int = 160, fqt: int = 1):
         if not got:
             with _KL_LOCK:
                 _KL_FAIL["n"] += 1
-                if _KL_FAIL["n"] >= 8 and not _KL_FAIL["dead"]:
+                if _KL_FAIL["n"] >= 2 and not _KL_FAIL["dead"]:
                     _KL_FAIL["dead"] = True
                     print("[warn] 东财 K 线连续失败，本次运行改用腾讯/新浪 K 线",
                           file=sys.stderr, flush=True)
@@ -425,18 +425,93 @@ def fetch_spot_sina(log=print):
     return df
 
 
+_SPOT_DEAD = {"until": 0.0}
+
+
 def fetch_spot():
-    """全 A 股快照：优先东财，被限流时自动切新浪。"""
+    """全 A 股快照：优先东财，被限流时自动切新浪源。
+
+    东财失败后 10 分钟内直接走新浪，避免每次调用都干等东财超时
+    （限流窗口通常持续数十分钟，反复试探只会延长封禁）。
+    """
+    if time.time() < _SPOT_DEAD["until"]:
+        return fetch_spot_sina()
     try:
         return fetch_spot_em()
     except Exception as e:
-        print(f"[warn] 东财快照不可用（{str(e)[:80]}），切换新浪源", file=sys.stderr, flush=True)
+        _SPOT_DEAD["until"] = time.time() + 600
+        print(f"[warn] 东财快照不可用（{str(e)[:80]}），切换新浪源"
+              f"（10 分钟内不再试探东财）", file=sys.stderr, flush=True)
         return fetch_spot_sina()
 
 
 # ------------------------------------------------------------------ 涨停池
 
 _POOL_FIELDS = None
+
+POOL_DIR = os.path.join(BASE_DIR, "docs", "data", "pool")
+
+
+def fetch_zt_pool_cached_file(date_str: str):
+    """仓库里留存的涨停池快照（docs/data/pool/DATE.json），作为离线兜底。"""
+    fp = os.path.join(POOL_DIR, f"{date_str}.json")
+    if not os.path.exists(fp):
+        return None
+    try:
+        import json
+        with io.open(fp, encoding="utf-8") as f:
+            js = json.load(f)
+        return js.get("pool") or None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def fetch_zt_pool_fallback(spot):
+    """东财涨停池不可用时，用行情快照反推当日涨停（仅收盘封板）。
+
+    lbc 无法得知，一律记 1；多连板会在后面的“首板前 30 日无涨停”检查里被筛掉，
+    所以不会把二连板当成首板。
+    """
+    out = []
+    for code, r in spot.iterrows():
+        try:
+            pct = float(r.get("pct"))
+            price = float(r.get("price"))
+            high = float(r.get("high"))
+            close = float(r.get("price"))
+        except (TypeError, ValueError):
+            continue
+        if not (pct >= 9.7 and close > 0 and high > 0 and close >= high * 0.999):
+            continue
+        out.append({
+            "code": code, "name": r.get("name"), "price": price, "pct": pct,
+            "lbc": 1, "first_time": 0, "last_time": 0, "zbc": 0,
+            "amount": float(r.get("amount") or 0),
+            "float_mcap": float(r.get("float_mcap") or 0),
+            "total_mcap": float(r.get("total_mcap") or 0),
+            "turnover": float(r.get("turnover") or 0),
+            "seal_fund": 0.0, "industry": "", "stat": {},
+        })
+    for x in out:
+        if x["float_mcap"] and x["price"]:
+            _FLOAT_SHARES.setdefault(x["code"], x["float_mcap"] / x["price"])
+    return out
+
+
+def save_pool_snapshot(date_str: str, pool):
+    """把当日涨停池落盘到 docs/data/pool，随仓库积累历史。"""
+    try:
+        import json
+        os.makedirs(POOL_DIR, exist_ok=True)
+        fp = os.path.join(POOL_DIR, f"{date_str}.json")
+        tmp = fp + ".tmp"
+        with io.open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"date": date_str, "count": len(pool), "pool": pool},
+                      f, ensure_ascii=False)
+        os.replace(tmp, fp)
+    except Exception:  # noqa: BLE001
+        pass
+
 
 def fetch_zt_pool(date_str: str):
     """
@@ -470,6 +545,8 @@ def fetch_zt_pool(date_str: str):
     for x in out:
         if x.get("float_mcap") and x.get("price"):
             _FLOAT_SHARES.setdefault(x["code"], x["float_mcap"] / x["price"])
+    if out:
+        save_pool_snapshot(date_str, out)
     return out
 
 # ------------------------------------------------------------------ 辅助数据

@@ -17,9 +17,9 @@ app.py  ←── 15:35 定时任务 / 手动刷新
       └─ data/snapshot_2026-11-04.json
 ```
 
-| 名单（手机主屏打开的样子） | 详情（K 线 + 22 项指标） | 说明页（点右上角 ?） |
+| 名单 | 详情（K 线 + 22 项指标） | 筛选漏斗（点顶部数字） |
 | --- | --- | --- |
-| <img src="shots/list.png" width="260"> | <img src="shots/detail.png" width="260"> | <img src="shots/info.png" width="260"> |
+| <img src="shots/list.png" width="230"> | <img src="shots/detail.png" width="230"> | <img src="shots/funnel.png" width="230"> |
 
 > **想在外面（不用电脑、不在家）也能看？** 用云端版：<https://ybl120579.github.io/stock-screener/>，
 > 由 GitHub Actions 每个交易日 15:40 自动跑、GitHub Pages 托管，手机 4G/5G 直接打开。
@@ -133,7 +133,8 @@ mobile/
 ├── data/
 │   └── snapshot_2026-11-04.json   每日快照（含名单与漏斗）
 ├── make_icons.py              生成图标
-├── dev/shot.js                截图脚本（调试用，node，无依赖）
+├── dev/cdp_shot.js            截图脚本（CDP，node，无依赖）
+├── dev/shot.js                旧截图脚本（iframe 方案）
 ├── shots/                     截图（README 里引用）
 ├── 启动手机App服务.bat
 ├── 开机自启-安装.bat

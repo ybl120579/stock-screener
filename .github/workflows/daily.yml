@@ -45,15 +45,28 @@ jobs:
       - name: 安装依赖
         run: pip install -r requirements-ci.txt
 
+      - name: 单元测试
+        run: python -m unittest discover -s tests -v
+
       - name: 跑筛选并生成静态页面
         run: |
+          set -o pipefail
           if [ "${{ inputs.force }}" = "true" ]; then
-            python build_static.py --schedule 15:40
+            python build_static.py --schedule 15:40 2>&1 | tee build.log
           else
-            python build_static.py --if-missing --schedule 15:40
+            python build_static.py --if-missing --schedule 15:40 2>&1 | tee build.log
           fi
 
+      - name: 记录失败原因
+        if: failure()
+        run: python tools/record_error.py
+
+      - name: 清除旧的失败记录
+        if: success()
+        run: rm -f docs/data/last_error.json
+
       - name: 提交并推送
+        if: always()
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

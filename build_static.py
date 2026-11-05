@@ -184,6 +184,15 @@ def main():
         "trade_date": as_of, "generated_at": now,
     })
 
+    # 涨停池快照随仓库积累，用于东财接口不可用时回溯；只保留最近 60 个交易日
+    pool_dir = os.path.join(data_dir, "pool")
+    try:
+        names = sorted(f for f in os.listdir(pool_dir) if f.endswith(".json"))
+        for old in names[:-60]:
+            os.remove(os.path.join(pool_dir, old))
+    except FileNotFoundError:
+        pass
+
     if not args.skip_ui:
         ui = os.path.join(HERE, "mobile", "ui")
         for name in UI_FILES:
