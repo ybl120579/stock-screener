@@ -88,6 +88,19 @@ GitHub 的定时任务偶尔会延迟几分钟到半小时才触发，对**日�
 
 `--token` 需要 `repo` + `workflow` 两个权限，用完就可以在 GitHub → Settings → Developer settings → Personal access tokens 里删掉；脚本只在内存里用它，不写进 `.git/config`。
 
+## 本地改了东西，怎么传上去
+
+不想把 token 交出来也没关系，仓库自带了两个一键脚本（都在 `tools/` 下，双击即可）：
+
+| 脚本 | 干什么 |
+| --- | --- |
+| `tools/push_to_github.bat` | 把本地改动提交并 `git push` 到 GitHub（第一次会弹浏览器让你登录） |
+| `tools/gh_run.py --force` | 命令行触发一次 Action 并打印每一步结果（需要 token） |
+
+`push_to_github.bat` 双击后：检查改动 → 没有提交就自动 `data: 本地快照` → 推送。
+推完 GitHub Actions 会自动重建页面，约 1 分钟后手机上刷新就能看到。
+如果不想让电脑一直开着，把 `mobile/开机自启-安装.bat` 装上，桌面端每天 15:35 也会自动跑一次（只补本地 `reports/`，云端靠 Actions）。
+
 ## 手动补跑 / 重跑
 
 仓库 → Actions → 「每日选股」→ Run workflow：
