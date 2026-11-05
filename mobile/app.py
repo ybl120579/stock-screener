@@ -492,14 +492,16 @@ def main():
     a = ap.parse_args()
     SCHEDULE_TIME = a.schedule
 
-    # 已有当天快照时，把状态补上，避免界面显示“从未更新”
-    today = datetime.now().date().isoformat()
+    # 用最新的一份快照回填状态，避免界面显示“从未更新”
     try:
-        with open(snapshot_path(today), encoding="utf-8") as f:
-            snap = json.load(f)
-        with STATE_LOCK:
-            STATE["last_run"] = snap.get("generated_at")
-            STATE["last_stage"] = f"完成 · {snap.get('count', 0)} 只"
+        files = sorted(f for f in os.listdir(DATA_DIR)
+                       if f.startswith("snapshot_") and f.endswith(".json"))
+        if files:
+            with open(os.path.join(DATA_DIR, files[-1]), encoding="utf-8") as f:
+                snap = json.load(f)
+            with STATE_LOCK:
+                STATE["last_run"] = snap.get("generated_at")
+                STATE["last_stage"] = f"完成 · {snap.get('count', 0)} 只"
     except Exception:
         pass
 
