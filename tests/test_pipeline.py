@@ -86,3 +86,29 @@ class TestFailureReason(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPickAsOf(unittest.TestCase):
+    """半夜跑不能把“今天”当成已经收盘的交易日。"""
+
+    def test_before_close_falls_back_to_previous_day(self):
+        days = ["2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06"]
+        now = bs.datetime(2026, 11, 6, 0, 7)
+        self.assertEqual(bs.pick_as_of(days, now), "2026-11-05")
+
+    def test_after_close_uses_today(self):
+        days = ["2026-11-04", "2026-11-05"]
+        now = bs.datetime(2026, 11, 5, 15, 40)
+        self.assertEqual(bs.pick_as_of(days, now), "2026-11-05")
+
+    def test_last_day_not_today_uses_it(self):
+        # 周六跑：日历最后一天是周五，直接用周五
+        days = ["2026-11-05", "2026-11-06"]
+        now = bs.datetime(2026, 11, 7, 10, 0)
+        self.assertEqual(bs.pick_as_of(days, now), "2026-11-06")
+
+    def test_single_day_before_close_returns_none(self):
+        self.assertIsNone(bs.pick_as_of(["2026-11-06"], bs.datetime(2026, 11, 6, 9, 0)))
+
+    def test_empty_calendar(self):
+        self.assertIsNone(bs.pick_as_of([], bs.datetime(2026, 11, 6, 16, 0)))

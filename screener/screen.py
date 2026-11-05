@@ -9,6 +9,7 @@
         缩量程度、小单净流入、人气榜、龙虎榜）
 """
 import math
+from datetime import datetime
 import time
 
 import numpy as np
@@ -74,6 +75,17 @@ def _inv(x, cold, hot, log=False):
 def run_screen(cfg, as_of=None, refresh=False, log=print):
     t0 = time.time()
     days = ds.get_trade_days(90)
+    if as_of is None:
+        # 交易日历的最后一个日期通常就是今天；还没收盘时数据没出，
+        # 用它去筛会得到空名单，所以退回上一个交易日。
+        now = datetime.now()
+        today = now.strftime("%Y-%m-%d")
+        if days and days[-1] == today and (now.hour, now.minute) < (15, 5):
+            as_of = days[-2] if len(days) >= 2 else days[-1]
+        else:
+            as_of = days[-1]
+        if as_of != today:
+            log(f"[info] 还没收盘（{today}），按上一个交易日 {as_of} 出名单")
     T = as_of or days[-1]
     if T not in days:
         raise ValueError(f"{T} 不是交易日。最近交易日: {days[-5:]}")

@@ -68,6 +68,21 @@ def kline_guard(meta, ratio=0.5, min_total=50):
     return True
 
 
+def pick_as_of(days, now=None, close_hour=15, close_minute=5):
+    """选出“数据可用”的最近交易日。
+
+    交易日历里最后一个日期通常就是今天；但如果现在还没收盘（数据没出），
+    就要退回上一个交易日，否则会拿一个空涨停池去算，把名单算成 0 只。
+    """
+    if not days:
+        return None
+    now = now or datetime.now(BJ)
+    today = now.strftime("%Y-%m-%d")
+    if days[-1] == today and (now.hour, now.minute) < (close_hour, close_minute):
+        return days[-2] if len(days) >= 2 else None
+    return days[-1]
+
+
 def next_trade_day(after, days):
     """交易日历只到当天，往后按工作日顺延（节假日由当天自动更新纠正）。"""
     for d in days:
@@ -91,7 +106,7 @@ def main():
     ap = argparse.ArgumentParser(description="生成静态站点到 docs/")
     ap.add_argument("--date", help="指定交易日（默认最近交易日）")
     ap.add_argument("--out", default=os.path.join(HERE, "docs"), help="输出目录")
-    ap.add_argument("--schedule", default="15:35", help="展示用的自动更新时间")
+    ap.add_argument("--schedule", default="15:40", help="展示用的自动更新时间")
     ap.add_argument("--skip-ui", action="store_true", help="只更新数据，不复制前端文件")
     ap.add_argument("--cached", action="store_true",
                     help="优先用本地缓存（cache/）出数据，网络不通时也能重建页面")
@@ -111,7 +126,7 @@ def main():
             if attempt == 3:
                 raise SystemExit("交易日历不可用，保留上一次数据")
             time.sleep(15)
-    as_of = args.date or days[-1]
+    as_of = args.date or pick_as_of(days)
     if as_of > days[-1]:
         raise SystemExit(f"还没有 {as_of} 的数据（最近交易日 {days[-1]}）")
 
@@ -137,6 +152,10 @@ def main():
                 raise SystemExit("筛选失败，保留上一次的数据不做覆盖")
             log(f"等待 {wait}s 后重试…")
             time.sleep(wait)
+
+    if not res["rows"]:
+        kt = (res.get("meta") or {}).get("kline_total") or 0
+        raise RuntimeError(f"{as_of} 一只都没筛出来（K线 {kt} 只），疑似数据未就绪，保留上一次名单")
 
     rows = []
     for r in res["rows"]:

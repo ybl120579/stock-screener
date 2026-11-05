@@ -12,14 +12,14 @@
   * 运行状态     /api/status      -> 定时任务、最近一次运行、下次运行时间
   * 立即刷新     POST /api/refresh-> 后台重跑一次筛选（单飞，不会并发）
 
-每日自动更新：进程内有一个后台线程，交易日 15:35（可配）之后自动重跑筛选并落盘快照，
+每日自动更新：进程内有一个后台线程，交易日 15:40（可配）之后自动重跑筛选并落盘快照，
 所以只要你把服务挂着（开机自启，见 README），手机每天早上打开就是当天的新名单。
 
 用法：
   python mobile/app.py                # 默认 0.0.0.0:8765，自动发现局域网地址
   python mobile/app.py --port 9000
   python mobile/app.py --run-now      # 启动后立刻跑一次再开服务
-  python mobile/app.py --schedule 15:35
+  python mobile/app.py --schedule 15:40
 """
 
 import argparse
@@ -57,11 +57,17 @@ STATE = {
     "last_error": None,
     "last_stage": "",       # 目前跑到哪一步（给前端显示）
     "next_run": None,       # 下次定时触发时间
+    # 自动更新失败后的退避重试（避免被限流时每 30 秒打一次）
+    "attempts": {},         # {"2026-11-05": 2}
+    "last_attempt": None,   # datetime
 }
+
+RETRY_WAITS_MIN = (10, 20, 40, 60)   # 第 n 次失败后，等这么多分钟再试
+MAX_ATTEMPTS_PER_DAY = 5
 STATE_LOCK = threading.Lock()
 RUN_LOCK = threading.Lock()
 
-SCHEDULE_TIME = "15:35"     # 交易日收盘后自动跑
+SCHEDULE_TIME = "15:40"     # 交易日收盘后自动跑（和云端 Actions 的 cron 对齐）
 CONFIG_PATH = os.path.join(PROJ, "config.json")
 
 try:  # Windows 控制台默认 GBK，中文会炸，统一切到 UTF-8
@@ -222,6 +228,22 @@ def is_trade_day(day):
     return ok
 
 
+def retry_delay_min(n):
+    """第 n 次失败之后，要等多少分钟才允许再试。"""
+    if n <= 0:
+        return 0
+    return RETRY_WAITS_MIN[min(n - 1, len(RETRY_WAITS_MIN) - 1)]
+
+
+def retry_ready(n, last, now):
+    """已经失败 n 次、上次尝试时间是 last，现在 now，是否该再试一次。"""
+    if n >= MAX_ATTEMPTS_PER_DAY:
+        return False
+    if last is None:
+        return True
+    return (now - last).total_seconds() >= retry_delay_min(n) * 60
+
+
 def scheduler_loop():
     log(f"定时任务已启动：交易日 {SCHEDULE_TIME} 自动更新")
     while True:
@@ -234,9 +256,23 @@ def scheduler_loop():
             with STATE_LOCK:
                 running = STATE["running"]
             if due and not have and not running and is_trade_day(today):
-                log(f"到达 {SCHEDULE_TIME}，开始更新 {today} 的名单")
-                threading.Thread(target=_safe_build, kwargs={"as_of": today},
-                                 daemon=True).start()
+                with STATE_LOCK:
+                    n = STATE["attempts"].get(today, 0)
+                    last = STATE["last_attempt"]
+                ready = retry_ready(n, last, now)
+                if n >= MAX_ATTEMPTS_PER_DAY:
+                    if n == MAX_ATTEMPTS_PER_DAY:
+                        log(f"{today} 今天已经试了 {n} 次都没成功，不再自动重试")
+                        with STATE_LOCK:
+                            STATE["attempts"][today] = n + 1
+                elif ready:
+                    log(f"到达 {SCHEDULE_TIME}，开始更新 {today} 的名单"
+                        + (f"（第 {n + 1} 次尝试）" if n else ""))
+                    with STATE_LOCK:
+                        STATE["last_attempt"] = now
+                        STATE["attempts"][today] = n + 1
+                    threading.Thread(target=_safe_build, kwargs={"as_of": today},
+                                     daemon=True).start()
             with STATE_LOCK:
                 STATE["next_run"] = _next_run_dt(now).strftime("%Y-%m-%d %H:%M")
             # 已经跑过今天的，就等到明天
@@ -249,8 +285,11 @@ def scheduler_loop():
 def _safe_build(**kw):
     try:
         build_snapshot(**kw)
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        log(f"[warn] 自动更新失败：{type(e).__name__}: {e}")
+        with STATE_LOCK:
+            STATE["last_error"] = f"{type(e).__name__}: {e}"
+            STATE["last_stage"] = "失败"
 
 
 # ----------------------------------------------------------------------------
