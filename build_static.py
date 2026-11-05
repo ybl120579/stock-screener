@@ -210,6 +210,7 @@ def main():
         except Exception:
             items = []
     items = [it for it in items if it.get("date") != as_of]
+    items = [it for it in items if (it.get("count") or 0) > 0]   # 空名单不进历史
     items.append({"date": as_of, "count": len(rows),
                   "top": rows[0]["name"] if rows else None,
                   "top_score": rows[0]["score"] if rows else None})
