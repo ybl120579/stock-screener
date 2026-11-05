@@ -12,3 +12,5 @@ mobile/ui/_shot.html
 mobile/shots/*.raw.png
 
 docs/_shot*.html
+build.log
+cache/

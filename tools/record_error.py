@@ -4,6 +4,7 @@
 无 token 也能从公开站点读到失败原因：
 https://ybl120579.github.io/stock-screener/data/last_error.json
 """
+import argparse
 import io
 import json
 import os
@@ -36,16 +37,23 @@ def guess_reason(lines):
 
 
 def main():
+    ap = argparse.ArgumentParser(description="记录一次失败的原因")
+    ap.add_argument("--log", default=LOG, help="构建日志路径（默认 build.log）")
+    ap.add_argument("--out", default=os.path.join(ROOT, "docs"),
+                    help="站点输出目录（默认 docs）")
+    args = ap.parse_args()
+    out = os.path.join(args.out, "data", "last_error.json")
+
     now = datetime.now(BJ)
-    lines = tail_lines(LOG)
+    lines = tail_lines(args.log)
     payload = {
         "time": now.strftime("%Y-%m-%d %H:%M:%S"),
         "reason": guess_reason(lines),
         "tail": lines[-12:],
         "note": "定时任务失败时写入；下次成功运行会删除该文件。",
     }
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with io.open(OUT, "w", encoding="utf-8") as f:
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with io.open(out, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=1)
 
     summary = os.environ.get("GITHUB_STEP_SUMMARY")

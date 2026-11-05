@@ -185,6 +185,10 @@ function renderRenew() {
   } else if (st && st.running) {
     dot = 'dot warn';
     bits.push('正在重新筛选…' + (st.last_stage ? '（' + st.last_stage + '）' : ''));
+  } else if (S.date) {
+    // 正在看历史某天：不按“今天没更新”报警，改成中性提示
+    bits.push('正在看历史 ' + S.date.slice(5) + ' 的名单');
+    if (st && st.last_run) bits.push('最新一次 ' + st.last_run.slice(5, 16));
   } else if (isStale()) {
     dot = 'dot bad';
     bits.push('今天还没更新成功 · 数据仍是 ' + S.snap.trade_date.slice(5));
@@ -195,7 +199,7 @@ function renderRenew() {
     else if (S.snap) bits.push('下次开盘日');
     if (st && st.last_error) { dot = 'dot warn'; bits.push('上次更新失败'); }
   }
-  if (S.err && S.err.time && !isStale()) {
+  if (S.err && S.err.time && !isStale() && !S.date) {
     dot = 'dot bad';
     bits.push('任务失败：' + String(S.err.reason || '').slice(0, 40));
   }

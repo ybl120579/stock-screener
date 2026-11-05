@@ -159,6 +159,12 @@ def main():
     }
     log(f"{as_of} 筛出 {len(rows)} 只，用时 {payload['elapsed_sec']}s")
 
+    # 成功产出后清掉上一次的失败记录，避免手机端一直挂着红点
+    stale_err = os.path.join(args.out, "data", "last_error.json")
+    if stale_err and os.path.exists(stale_err):
+        os.remove(stale_err)
+        log("已清除上一次的失败记录")
+
     out = args.out
     data_dir = os.path.join(out, "data")
     write_json(os.path.join(data_dir, "archive", f"{as_of}.json"), payload)
