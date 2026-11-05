@@ -450,6 +450,15 @@ const FUNNEL_HINT = {
   '最终入选': '通过全部条件，按冷度分排序',
 };
 
+function auxNote(d) {
+  const miss = d.aux_missing || [];
+  const bits = [];
+  if (d.spot_source) bits.push(`行情源：${d.spot_source}`);
+  if (miss.length) bits.push(`${miss.join('、')} 本次未取到（相关评分按中性计）`);
+  if (!bits.length) return '';
+  return `<p class="dim aux">${bits.join(' · ')}</p>`;
+}
+
 function openFunnel() {
   const d = S.snap; if (!d) return;
   const f = d.funnel || {};
@@ -475,6 +484,7 @@ function openFunnel() {
     <p>从 ${top} 条涨停记录里，一层层筛到 <b>${d.count}</b> 只。左边数字是「这一层还剩多少」，
        右边 <i class="cut">−N</i> 是被这一层去掉的数量。</p>
     ${rows}
+    ${auxNote(d)}
     <p class="dim">只做形态与热度过滤，不含任何未来信息；数据来自公开行情接口。</p>
   </div>`;
 }

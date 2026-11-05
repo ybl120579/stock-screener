@@ -82,16 +82,19 @@ def run_screen(cfg, as_of=None, refresh=False, log=print):
     # ---------- 行情快照 / 辅助数据（按交易日缓存） ----------
     spot = ds.cached("spot", f"spot_{T}", ds.fetch_spot, refresh)
     gdhs = ds.cached("aux", f"gdhs_{T}", ds.fetch_gdhs, refresh)
+    aux_missing = []
     try:
         hotrank = ds.cached("aux", f"hotrank_{T}", ds.fetch_hot_rank, refresh)
     except Exception as e:  # noqa: BLE001
         log(f"[warn] 人气榜获取失败，跳过：{e}")
         hotrank = None
+        aux_missing.append("人气榜")
     try:
         fundflow = ds.cached("aux", f"fundflow_{T}", ds.fetch_fund_flow, refresh)
     except Exception as e:  # noqa: BLE001
         log(f"[warn] 资金流获取失败，跳过：{e}")
         fundflow = None
+        aux_missing.append("资金流")
 
     # ---------- 最近 N 日涨停池（含今日，共 N+1 天，覆盖“首板距今 N 天”） ----------
     n_days = cfg["board_window_days"]
@@ -124,6 +127,7 @@ def run_screen(cfg, as_of=None, refresh=False, log=print):
                                              T.replace("-", "")), refresh)
     except Exception as e:  # noqa: BLE001
         log(f"[warn] 龙虎榜获取失败，跳过：{e}")
+        aux_missing.append("龙虎榜")
 
     reached = [0] * len(FUNNEL_STAGES)
     records, rejects = [], []
@@ -207,6 +211,8 @@ def run_screen(cfg, as_of=None, refresh=False, log=print):
             "exclude_hot_rank_top", "lhb_after_penalty", "min_bars")},
         "weights": dict(cfg["weights"]),
         "universe_main_count": int(sum(1 for c in spot.index if is_main_board(c))),
+        "aux_missing": aux_missing,
+        "spot_source": getattr(spot, "attrs", {}).get("source"),
     }
     return {"rows": uniq[: cfg["top_n"]], "all_rows": uniq, "meta": meta}
 
@@ -311,12 +317,13 @@ def _evaluate(rec, kl, T, days, cfg, spot, gdhs, hotrank, lhb_after, fundflow):
         "code": code, "name": name, "industry": rec.get("industry") or "",
         "board_date": d, "days_since": days_since,
         "window": "5日内" if days_since <= cfg["short_window_days"] else "10日内",
-        "board_pct": round(float(rec["pct"]), 2),
+        "board_pct": round(float(rec.get("pct") or 0), 2),
         "board_turnover": round(float(to[j]), 2),
         "board_amount_yi": round(float(amt[j]) / 1e8, 2),
-        "board_seal_yi": round(rec["seal_fund"] / 1e8, 2),
-        "seal_ratio_pct": round(rec["seal_fund"] / rec["float_mcap"] * 100, 2) if rec.get("float_mcap") else None,
-        "board_first_time": (f"{rec['first_time']:06d}" if rec.get("first_time") else ""),
+        "board_seal_yi": round(_f(rec.get("seal_fund")) / 1e8, 2) if _f(rec.get("seal_fund")) else None,
+        "seal_ratio_pct": (round(_f(rec.get("seal_fund")) / _f(rec.get("float_mcap")) * 100, 2)
+                           if _f(rec.get("seal_fund")) and _f(rec.get("float_mcap")) else None),
+        "board_first_time": (f"{int(rec['first_time']):06d}" if rec.get("first_time") else ""),
         "pre_close": round(float(pre_close), 2),
         "board_close": round(float(board_close), 2),
         "board_open": round(float(board_open), 2),

@@ -324,6 +324,7 @@ def fetch_spot_em():
         })
     df = pd.DataFrame(out).set_index("code")
     _fill_float_shares(df)
+    df.attrs["source"] = "东财"
     return df
 
 
@@ -422,6 +423,7 @@ def fetch_spot_sina(log=print):
     log(f"[源] 新浪快照 {len(out)} 只")
     df = pd.DataFrame(out).set_index("code")
     _fill_float_shares(df)
+    df.attrs["source"] = "新浪"
     return df
 
 

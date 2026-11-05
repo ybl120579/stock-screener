@@ -150,6 +150,8 @@ def main():
         "kline_ok": meta.get("kline_ok"),
         "kline_total": meta.get("kline_total"),
         "universe_main_count": meta.get("universe_main_count"),
+        "aux_missing": meta.get("aux_missing") or [],
+        "spot_source": meta.get("spot_source"),
         "params": meta.get("params"),
         "weights": meta.get("weights"),
         "rows": rows,

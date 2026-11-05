@@ -120,60 +120,106 @@ def main():
     args = ap.parse_args()
 
     cfg = cfgmod.load_config()
-    days = ds.get_trade_days(lmt=400)
+    alldays = ds.get_trade_days(lmt=400)          # 用来算“距首板几天”
     if args.start:
-        days = [d for d in days if d >= args.start]
+        days = [d for d in alldays if d >= args.start][:args.days]
     else:
-        days = days[-args.days:]
+        days = alldays[-args.days:]
     log(f"回测区间 {days[0]} → {days[-1]}，共 {len(days)} 个交易日")
 
     klines = load_klines(force=args.refresh)
     spot = ds.fetch_spot()
     names = {c: spot.loc[c, "name"] for c in spot.index if "name" in spot.columns}
 
+    # 预先算出每只股票的全部“真首板日”（涨停且前 30 日无涨停）
+    boards = {}
+    for code, df in klines.items():
+        lu = limit_up_flags(df)
+        if not lu.any():
+            continue
+        dates = df["date"].tolist()
+        look = cfg["first_board_lookback_days"]
+        idx = np.flatnonzero(lu)
+        hit = []
+        for i in idx:
+            if i < look:
+                continue
+            if lu[i - look:i].any():
+                continue
+            hit.append(i)
+        if hit:
+            boards[code] = hit
+
+    log(f"有真首板记录的股票 {len(boards)} 只")
+
     daily, all_picks = [], []
-    for di, d in enumerate(days):
+    for d in days:
+        iT = alldays.index(d)
         picks, cand = [], []
-        for code, df in klines.items():
+        n_board_today = 0
+        for code, hit in boards.items():
+            df = klines[code]
             dates = df["date"].tolist()
-            if dates[-1] < d or d not in dates:
+            if d not in dates:
                 continue
             i = dates.index(d)
-            if i < cfg["first_board_lookback_days"]:
-                continue
-            lu = limit_up_flags(df)
-            if not lu[i] or lu[i - 30:i].any():
-                continue  # 不是首板
-            sub = df.iloc[: i + 1].reset_index(drop=True)
-            rec = {"code": code, "name": names.get(code, code), "board_date": d,
-                   "lbc": 1, "pct": float(df["pct"].iloc[i]), "float_mcap": None}
-            fr = forward_returns(df, i)
-            cand.append({"code": code, "name": rec["name"], **fr})
-            stage, row = sc._evaluate(rec, sub, d, days, cfg, spot,
-                                      None, None, {}, None)
-            if row is not None:
-                row["score_parts"] = sc._score_parts(row)
-                row["score"] = sc._score(row, cfg)
-                row.update(fr)
-                picks.append(row)
+            for j in hit:
+                if j > i:
+                    break
+                since = i - j
+                if since == 0:
+                    n_board_today += 1
+                if not (1 <= since <= cfg["board_window_days"]):
+                    continue
+                bd = dates[j]
+                sub = df.iloc[: i + 1].reset_index(drop=True)
+                rec = {"code": code, "name": names.get(code, code), "board_date": bd,
+                       "lbc": 1, "pct": float(df["pct"].iloc[j]), "float_mcap": None,
+                       "seal_fund": None, "first_time": 0, "industry": ""}
+                fr = forward_returns(df, i)
+                # 基准组：窗口内的所有首板股（不加条件二/四）
+                cand.append({"code": code, "name": rec["name"], **fr})
+                stage, row = sc._evaluate(rec, sub, d, alldays, cfg, spot,
+                                          None, None, {}, None)
+                if row is not None:
+                    row["score_parts"] = sc._score_parts(row)
+                    row["score"] = sc._score(row, cfg)
+                    row.update(fr)
+                    row["board_date"] = bd
+                    row["eval_date"] = d
+                    row["days_since"] = since
+                    picks.append(row)
 
+        # 同一只股票在窗口内可能有多条首板记录：只保留最近一次
+        picks.sort(key=lambda r: (r["code"], -r["days_since"]))
+        seen, uniq = set(), []
+        for r in picks:
+            if r["code"] in seen:
+                continue
+            seen.add(r["code"])
+            uniq.append(r)
+        picks = uniq
         picks.sort(key=lambda r: -r["score"])
         for k, p in enumerate(picks, 1):
             p["rank"] = k
-            p["board_date"] = d
             all_picks.append(p)
 
         daily.append({
             "date": d,
-            "first_boards": len(cand),
+            "first_boards": n_board_today,
+            "candidates": len(cand),
             "picks": len(picks),
             "pick_codes": [p["code"] for p in picks],
+            "avg_r1_picks": _mean([p["r1"] for p in picks]),
+            "avg_r1_base": _mean([c["r1"] for c in cand]),
+            "avg_r3_picks": _mean([p["r3"] for p in picks]),
+            "avg_r3_base": _mean([c["r3"] for c in cand]),
             "avg_r5_picks": _mean([p["r5"] for p in picks]),
             "avg_r5_base": _mean([c["r5"] for c in cand]),
             "avg_r10_picks": _mean([p["r10"] for p in picks]),
             "avg_r10_base": _mean([c["r10"] for c in cand]),
         })
-        log(f"{d} 首板 {len(cand):3d} → 入选 {len(picks):2d}  "
+        log(f"{d} 首板 {n_board_today:3d} · 窗口候选 {len(cand):3d} → 入选 {len(picks):2d}  "
             f"r5 入选 {_fmt(daily[-1]['avg_r5_picks'])} / 全体 {_fmt(daily[-1]['avg_r5_base'])}")
 
     report = summarize(daily, all_picks)
@@ -181,7 +227,8 @@ def main():
     path = os.path.join(args.out, f"backtest_{len(days)}d.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"daily": daily, "summary": report,
-                   "picks": all_picks}, f, ensure_ascii=False, indent=1)
+                   "picks": all_picks}, f, ensure_ascii=False, indent=1,
+                  default=lambda o: o.item() if hasattr(o, "item") else str(o))
 
     print_report(report, daily, all_picks)
     log(f"已写入 {path}")
@@ -226,7 +273,8 @@ def summarize(daily, picks):
             "mean": _mean(col(key)), "median": _median(col(key)),
             "win_rate": _win(col(key)), "n": sum(1 for x in col(key) if x is not None),
         }
-        base = [d[f"avg_r{h}_base"] for d in daily if d[f"avg_r{h}_base"] is not None]
+        base = [d.get(f"avg_r{h}_base") for d in daily]
+        base = [b for b in base if b is not None]
         out["baseline_fwd"][key] = {"mean_per_day": _mean(base)}
 
     # 按冷度分分位看 5 日收益，检验“分越高越有效”是否成立
