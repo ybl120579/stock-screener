@@ -92,6 +92,14 @@ function getJSON(url) {
   const sheetOpen = await evalJS(`!!document.querySelector('#sheet.on')`);
   const clip = await evalJS(`navigator.clipboard.readText().then(t => t).catch(e => 'READ-ERR:' + e.message)`);
 
+  const shotArg = (process.argv[4] || '').replace(/^--shot=/, '');
+  if (process.argv[4] && process.argv[4].startsWith('--shot=')) {
+    const shot = await send('Page.captureScreenshot', { format: 'png' }, sessionId);
+    const fs2 = require('fs'), p2 = require('path');
+    fs2.mkdirSync(p2.dirname(p2.resolve(shotArg)), { recursive: true });
+    fs2.writeFileSync(p2.resolve(shotArg), Buffer.from(shot.result.data, 'base64'));
+    console.log('shot   :', p2.resolve(shotArg));
+  }
   console.log('button :', box.txt, '(data-copy=' + box.code + ')');
   console.log('toast  :', toast);
   console.log('sheet  :', sheetOpen ? '打开（错误！）' : '未打开（正确）');

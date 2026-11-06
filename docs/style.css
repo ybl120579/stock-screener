@@ -75,8 +75,11 @@ header{position:sticky;top:0;z-index:20;background:rgba(10,13,18,.92);
 button.code{display:inline-flex;align-items:center;gap:3px;background:transparent;border:0;padding:1px 4px;margin-left:2px;
   border-radius:6px;font:inherit;font-size:11.5px;color:var(--dim);cursor:pointer;-webkit-tap-highlight-color:transparent}
 button.code svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.4;opacity:.55}
-button.code:active,button.code:hover{background:rgba(91,140,255,.14);color:var(--acc)}
-button.code:active svg,button.code:hover svg{opacity:1}
+button.code:active{background:rgba(91,140,255,.14);color:var(--acc)}
+button.code:active svg{opacity:1}
+/* 只在真有悬停能力的设备上用 hover 高亮，避免手机上点完高亮一直挂着 */
+@media (hover:hover){button.code:hover{background:rgba(91,140,255,.14);color:var(--acc)}
+  button.code:hover svg{opacity:1}}
 #phead h2 button.code{font-size:13px;margin-left:6px}
 #phead h2 button.code svg{width:12px;height:12px}
 .nm h3 .tag{font-size:10px;padding:0 5px}
