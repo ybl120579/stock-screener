@@ -53,7 +53,7 @@ header{position:sticky;top:0;z-index:20;background:rgba(10,13,18,.92);
 .renew .dot.warn{background:#f5a524;box-shadow:0 0 6px rgba(245,165,36,.6)}
 .renew .dot.bad{background:#ff5a5f;box-shadow:0 0 6px rgba(255,90,95,.7)}
 .renew .dot.off{background:#5d6775;box-shadow:none}
-.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;margin-bottom:10px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:2px;margin-bottom:10px}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex:0 0 auto;padding:6px 11px;border-radius:999px;background:var(--card);
   border:1px solid var(--line);color:var(--mut);font-size:12.5px;white-space:nowrap}
@@ -180,3 +180,23 @@ input.q::placeholder{color:var(--dim)}
 input.q:focus{border-color:#2f6bff}
 input.q:disabled{opacity:.5}
 .whytop .st.ok{color:#2bd48f;background:rgba(43,212,143,.12)}
+
+/* ---- 当天 / 次日涨跌 ---- */
+.perf{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:9px;
+  background:var(--line);border-radius:10px;overflow:hidden}
+.perf > div{background:#0e131a;padding:6px 10px;display:flex;align-items:baseline;
+  justify-content:space-between;gap:6px}
+.perf i{font-style:normal;font-size:11px;color:var(--dim);white-space:nowrap}
+.perf b{font-size:15px;font-variant-numeric:tabular-nums;letter-spacing:.2px}
+.perf b.wait{font-size:12px;color:var(--dim);font-weight:500}
+
+.daysum{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  margin-top:10px;padding:2px 0}
+.daysum:empty{display:none;border:0;margin:0;padding:0}
+.daysum .ds{display:flex;align-items:baseline;gap:7px;padding:7px 12px;font-size:12px}
+.daysum .ds + .ds{border-top:1px dashed var(--line)}
+.daysum i{font-style:normal;color:var(--dim);min-width:74px}
+.daysum b{font-size:14px;font-variant-numeric:tabular-nums;min-width:60px}
+.daysum b.wait{font-size:12px;color:var(--dim);font-weight:500;min-width:0}
+.daysum span{color:var(--dim);font-size:11.5px;margin-left:auto}
+#dates .chip b.pct{font-weight:600;margin-left:2px}

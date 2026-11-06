@@ -108,6 +108,8 @@ def main():
     ap.add_argument("--out", default=os.path.join(HERE, "docs"), help="输出目录")
     ap.add_argument("--schedule", default="15:40", help="展示用的自动更新时间")
     ap.add_argument("--skip-ui", action="store_true", help="只更新数据，不复制前端文件")
+    ap.add_argument("--skip-returns", action="store_true",
+                    help="不补写历史名单的次日涨跌幅（没网/调试时用）")
     ap.add_argument("--cached", action="store_true",
                     help="优先用本地缓存（cache/）出数据，网络不通时也能重建页面")
     ap.add_argument("--if-missing", action="store_true",
@@ -241,6 +243,15 @@ def main():
             if os.path.exists(src):
                 shutil.copy2(src, os.path.join(out, name))
         open(os.path.join(out, ".nojekyll"), "w").close()
+
+    if not args.skip_returns:
+        # 历史名单的「次日涨跌幅」要等下一个交易日收盘才有，所以每次构建都回头补一遍。
+        # 这一步依赖行情接口，失败只记警告，不能影响当天名单的产出。
+        try:
+            import returns as _returns
+            _returns.attach(out, log=log)
+        except Exception as e:  # noqa: BLE001
+            log(f"[warn] 补写次日涨跌幅失败（不影响当天名单）：{e}")
 
     log(f"完成 → {out}")
     return 0

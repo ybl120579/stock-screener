@@ -17,6 +17,7 @@ const SORTS = [
   ['retrace', '回踩幅度'],
   ['turnover', '换手率'],
   ['days', '首板最近'],
+  ['next', '次日涨跌'],
 ];
 
 /* ---------------- 工具 ---------------- */
@@ -219,9 +220,28 @@ function renderStats() {
     <div class="stat" data-funnel="1"><b>${board}</b><span>真首板</span></div>
     <div class="stat" data-funnel="1"><b>${left}</b><span>回踩到位</span></div>
     <div class="stat" data-funnel="1"><b>${n0}</b><span>涨停池</span></div>`;
+  renderDaySummary(d);
   const sub = `数据日期 ${d.trade_date} · ${d.generated_at.slice(11, 16)} 生成`
     + (S.offline ? ' · 离线' : '') + (d.elapsed_sec ? ` · ${d.elapsed_sec}s` : '');
   $('#sub').textContent = sub;
+}
+
+function renderDaySummary(d) {
+  const el = $('#daysum'); if (!el) return;
+  const day = d.day_summary, nxt = d.next_summary;
+  if (!day && !nxt) { el.innerHTML = ''; return; }
+  const bits = [];
+  if (day && day.n) {
+    bits.push(`<div class="ds"><i>当天 ${day.n} 只平均</i><b class="${cls(day.avg_pct)}">${sgn(day.avg_pct)}</b>
+      <span>涨 ${day.up} · 跌 ${day.down}</span></div>`);
+  }
+  if (nxt && nxt.n) {
+    bits.push(`<div class="ds"><i>次日平均</i><b class="${cls(nxt.avg_pct)}">${sgn(nxt.avg_pct)}</b>
+      <span>涨 ${nxt.up} · 跌 ${nxt.down} · 胜率 ${num(nxt.win_rate, 1)}%</span></div>`);
+  } else if (d.trade_date) {
+    bits.push(`<div class="ds"><i>次日表现</i><b class="wait">等下一个交易日</b></div>`);
+  }
+  el.innerHTML = bits.join('');
 }
 
 /* ---------------- 排序 ---------------- */
@@ -241,6 +261,9 @@ function filtered() {
     retrace: (a, b) => a.retrace_pct - b.retrace_pct,
     turnover: (a, b) => a.today_turnover - b.today_turnover,
     days: (a, b) => a.days_since - b.days_since,
+    // 次日涨跌：有数据的排前面、按收益从高到低；还没出数据的一律垫底
+    next: (a, b) => (b.next_close_pct == null ? -999 : b.next_close_pct)
+      - (a.next_close_pct == null ? -999 : a.next_close_pct),
   }[S.sort];
   return rows.slice().sort(by);
 }
@@ -274,6 +297,13 @@ function card(r, i) {
         </div>
       </div>
       ${ring(r.score)}
+    </div>
+    <div class="perf">
+      <div><i>当天涨跌</i><b class="${cls(r.today_pct)}">${sgn(r.today_pct)}</b></div>
+      <div><i>次日${r.next_date ? ' ' + r.next_date.slice(5) : ''}</i>${
+        r.next_close_pct == null
+          ? '<b class="wait">待次日</b>'
+          : `<b class="${cls(r.next_close_pct)}">${sgn(r.next_close_pct)}</b>`}</div>
     </div>
     <div class="kv">
       <div><i>回踩</i><b class="${cls(r.retrace_pct)}">${num(r.retrace_pct, 1)}%</b></div>
@@ -359,7 +389,9 @@ async function loadHistory() {
     if (items.length < 2) { $('#dates').innerHTML = ''; return; }
     $('#dates').innerHTML = items.map(it =>
       `<div class="chip ${(!S.date && it === items[0]) || S.date === it.date ? 'on' : ''}"
-        data-date="${it.date}">${it.date.slice(5)} · ${it.count}只</div>`).join('');
+        data-date="${it.date}">${it.date.slice(5)} · ${it.count}只${
+        it.next_avg_pct == null ? '' :
+        ` <b class="pct ${it.next_avg_pct > 0 ? 'up' : (it.next_avg_pct < 0 ? 'dn' : 'mut')}">${it.next_avg_pct > 0 ? '+' : ''}${it.next_avg_pct.toFixed(1)}%</b>`}</div>`).join('');
   } catch (e) { /* ignore */ }
 }
 
@@ -423,7 +455,14 @@ async function openSheet(code) {
       ${metric('流通市值', num(row.float_mcap_yi, 0) + ' 亿')}
       ${metric('60日涨幅', sgn(row.gain60_pct), cls(row.gain60_pct))}
       ${metric('股东数据', esc((row.holder_stat_date || '').slice(5) || '—'))}
+      ${row.next_close_pct == null ? '' : `
+      ${metric('次日开盘', sgn(row.next_open_pct), cls(row.next_open_pct))}
+      ${metric('次日最高', sgn(row.next_high_pct), cls(row.next_high_pct))}
+      ${metric('次日收盘', sgn(row.next_close_pct), cls(row.next_close_pct))}`}
     </div>
+    ${row.next_close_pct == null ? '' : `
+    <div class="sect"><span>次日表现（相对 ${esc(row.next_date || '')} 收盘）</span>
+      <b class="${cls(row.next_close_pct)}">${sgn(row.next_close_pct)}</b></div>`}
     <div class="sect"><span>冷度评分构成</span><b>${num(row.score, 1)} / 100</b></div>
     <div class="scorebar">
       ${Object.entries(row.score_parts || {}).map(([k, v]) => {
@@ -559,6 +598,13 @@ function openInfo() {
        也就是说：这套过滤比“随便买首板”稳，但绝对收益接近零，<b>不是稳赚策略</b>。
        冷度分确实有区分度：最高分那组 T+5 均值 +1.2%，最低分那组 -0.2%（中间两组 -0.8%~-0.9%）；
        样本只有 60 天、单一市场环境，别把回测当成未来收益的保证。</p>
+    <h4>当天 / 次日涨跌</h4>
+    <p>名单是收盘后按当天数据选的，所以两只数字含义不同：<br>
+       ・<b>当天涨跌</b>：这只票入选当天的涨跌幅；<br>
+       ・<b>次日涨跌</b>：入选后下一个交易日、相对入选当天收盘的涨跌幅。<br>
+       顶部会给出当天 N 只的平均和涨跌家数、次日平均和胜率；点历史日期可以回看那天的结果，
+       排序里也有「次日涨跌」，用来检查选出来的票后来到底跑得怎么样。
+       注意它只衡量“选得准不准”，不构成收益承诺。</p>
     <h4>请注意</h4>
     <p>冷度分只衡量「热度低 / 散户少 / 缩量」，<b>不代表上涨概率</b>，也不是买入信号；
        首板回踩属于右侧转左侧的博弈形态，跌破首板前收盘价（左侧锚点）形态就破了，需要重新评估。
