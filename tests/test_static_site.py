@@ -76,6 +76,19 @@ class TestStaticSite(unittest.TestCase):
             self.assertTrue(os.path.exists(os.path.join(arch, it["date"] + ".json")),
                             f"history 有 {it['date']} 但 archive 缺文件")
 
+    def test_copy_code_feature(self):
+        """一键复制代码：卡片与详情页都有按钮，且点击优先于打开详情。"""
+        js = io.open(os.path.join(DOCS, "app.js"), encoding="utf-8").read()
+        self.assertIn("function copyText(", js, "缺少 copyText 实现")
+        self.assertIn("data-copy", js, "卡片/详情缺少 data-copy 按钮")
+        # 复制按钮必须排在 .card 开详情之前，否则点代码会误开详情
+        i_copy = js.find("closest('[data-copy]')")
+        i_card = js.find("closest('.card')")
+        self.assertGreater(i_copy, -1, "点击委托里没有处理 [data-copy]")
+        self.assertLess(i_copy, i_card, "[data-copy] 必须在 .card 之前拦截")
+        css = io.open(os.path.join(DOCS, "style.css"), encoding="utf-8").read()
+        self.assertIn("button.code", css, "缺少复制按钮样式")
+
     def test_status_has_next_run(self):
         st = json.loads(io.open(os.path.join(DATA, "status.json"),
                                 encoding="utf-8").read())

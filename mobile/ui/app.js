@@ -34,6 +34,31 @@ const money = v => {
   return num(v * 10000, 0) + '万';
 };
 
+/* 一键复制股票代码：HTTPS/localhost 用 clipboard API，其余退化为 execCommand */
+function copyText(txt) {
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = txt;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, txt.length);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(txt).then(() => true).catch(() => fallback());
+  }
+  return Promise.resolve(fallback());
+}
+
+function copyCode(code, ev) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  copyText(code).then(ok => toast(ok ? '已复制代码 ' + code : '复制失败，请长按手动复制'));
+}
+
 function toast(msg, ms = 2000) {
   const t = $('#toast');
   t.textContent = msg;
@@ -296,7 +321,8 @@ function card(r, i) {
     <div class="crow">
       <div class="rank">${i + 1}</div>
       <div class="nm">
-        <h3>${esc(r.name)}<span class="code">${esc(r.code)}</span>${hit}</h3>
+        <h3>${esc(r.name)}<button class="code" type="button" data-copy="${esc(r.code)}"
+          title="复制代码">${esc(r.code)}<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.6" y="5.6" width="8" height="8" rx="1.6"/><path d="M10.4 5.6V3.9a1.5 1.5 0 0 0-1.5-1.5H3.9a1.5 1.5 0 0 0-1.5 1.5v5a1.5 1.5 0 0 0 1.5 1.5h1.7"/></svg></button>${hit}</h3>
         <div class="sub">
           <span>${esc(r.industry || '—')}</span>
           <span class="tag ${wtag}">${esc(r.window)}</span>
@@ -472,7 +498,8 @@ async function openSheet(code) {
   document.body.style.overflow = 'hidden';
   $('#pbody').innerHTML = '<div class="skel" style="height:200px"></div>';
   $('#phead').innerHTML = `<div class="bar"></div>
-    <h2>${esc(row.name)}<span>${esc(row.code)} · ${esc(row.industry || '')}</span></h2>
+    <h2>${esc(row.name)}<button class="code lg" type="button" data-copy="${esc(row.code)}"
+      title="复制代码">${esc(row.code)}<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.6" y="5.6" width="8" height="8" rx="1.6"/><path d="M10.4 5.6V3.9a1.5 1.5 0 0 0-1.5-1.5H3.9a1.5 1.5 0 0 0-1.5 1.5v5a1.5 1.5 0 0 0 1.5 1.5h1.7"/></svg></button><span>${esc(row.industry || '')}</span></h2>
     <div class="px"><b class="${cls(row.today_pct)}">${num(row.today_close, 2)}</b>
       <span class="${cls(row.today_pct)}">${sgn(row.today_pct)}</span>
       <span>今换手 ${num(row.today_turnover, 2)}%</span>
@@ -655,6 +682,9 @@ function openInfo() {
        所以某一路数据挂了也能出名单。<br>
        云端每交易日 15:40 起跑、最多重试 4 次；本机版服务每天收盘后重跑，当时没开机会在下次启动时补跑。
        本轮的取数情况可以在「筛选漏斗」页底部看到。</p>
+    <h4>一键复制代码</h4>
+    <p>点股票名称旁边的 <b>6 位代码</b>（旁边有个小复制图标）就会复制到剪贴板，
+       直接粘到券商 App 的搜索框里就行。详情页标题里的代码也能点。</p>
     <h4>今天该不该做（市场环境）</h4>
     <p>每天收盘后先看三件事：全市场<b>涨停家数</b>、<b>炸板率</b>、<b>昨日涨停今日溢价</b>。
        任一变差（涨停 &lt;30 家 / 炸板 &gt;45% / 溢价 &lt;−1.5%）就是「退潮期」，
@@ -832,6 +862,8 @@ function bind() {
   $('#sheet .mask').addEventListener('click', closeSheet);
 
   document.addEventListener('click', e => {
+    const cp = e.target.closest('[data-copy]');
+    if (cp) { copyCode(cp.dataset.copy, e); return; }
     if (e.target.closest('#stats [data-funnel]')) { openFunnel(); return; }
     if (e.target.closest('#btnPlan')) { openPlan(); return; }
 
