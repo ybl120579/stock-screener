@@ -34,7 +34,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          # 推之前要用 merge-base 判断远端有没有往前走，shallow clone 会判断错，所以拉全history（仓库只有几 MB）
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -73,7 +74,35 @@ jobs:
           git add docs
           if git diff --staged --quiet; then
             echo "没有变化，跳过提交"
-          else
-            git commit -m "data: $(date -u +%F) 每日快照"
-            git push
+            exit 0
           fi
+          git commit -m "data: $(date -u +%F) 每日快照"
+
+          # 同一天可能有多次运行（4 个定时 + 手动触发）。谁先发布算谁的：
+          # 后到的机器发现远端已经往前走了，就直接放弃推送（只留日志），
+          # 不 rebase —— 因为 list.json / status.json 每次都会变，rebase 必然冲突。
+          local_date=$(python -c "import json;print(json.load(open('docs/data/status.json')).get('trade_date',''))")
+          git fetch --quiet origin main || true
+          remote_date=$(git show origin/main:docs/data/status.json 2>/dev/null \
+            | python -c "import sys,json;print(json.load(sys.stdin).get('trade_date',''))" 2>/dev/null \
+            || echo "")
+
+          if ! git merge-base --is-ancestor origin/main HEAD; then
+            echo "远端已往前推进（另一次运行刚发布），本次跳过推送；本地 ${local_date} 名单未发布"
+            exit 0
+          fi
+          if [ "$remote_date" = "$local_date" ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "远端已有 ${local_date} 的快照，跳过推送"
+            exit 0
+          fi
+
+          for i in 1 2 3; do
+            if git push; then
+              echo "推送成功：${local_date}"
+              exit 0
+            fi
+            echo "第 $i 次推送失败，10 秒后重试"
+            sleep 10
+          done
+          echo "::error::推送最终失败"
+          exit 1
