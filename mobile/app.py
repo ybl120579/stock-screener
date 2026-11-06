@@ -102,6 +102,8 @@ def _slim(r):
         "float_mcap_yi", "gain60_pct", "price", "holder_avg_wan",
         "holder_chg_pct", "holder_stat_date", "retail_pct", "hot_rank",
         "lhb_on_board", "lhb_after_cnt", "score", "score_parts", "decay_penalty",
+        "board_quality", "quality_parts", "ind_zt", "ind_rank",
+        "board_zbc", "release_date", "reduce_cnt",
     ]
     out = {k: r.get(k) for k in keys}
     out["spark"] = spark
@@ -137,6 +139,8 @@ def build_snapshot(as_of=None, refresh=False):
             "kline_total": meta.get("kline_total"),
             "universe_main_count": meta.get("universe_main_count"),
         "aux_missing": meta.get("aux_missing") or [],
+        "regime": meta.get("regime"),
+        "plan": meta.get("plan"),
         "spot_source": meta.get("spot_source"),
             "params": meta.get("params"),
             "weights": meta.get("weights"),

@@ -35,5 +35,21 @@
   "score_min": 0.0,
   "top_n": 50,
   "output_dir": "reports",
-  "cache": true
+  "cache": true,
+  "regime_gate": true,
+  "regime_min_zt": 30,
+  "regime_max_zhaban_pct": 45.0,
+  "regime_min_premium_pct": -1.5,
+  "min_board_quality": 0.0,
+  "min_industry_zt": 0,
+  "reject_release_in_days": 5,
+  "reject_reduce_days": 30,
+  "reduce_penalty": 6.0,
+  "plan_top_n": 5,
+  "plan_position_pct": 20.0,
+  "plan_max_per_industry": 2,
+  "plan_stop_pct": 3.0,
+  "plan_time_stop_days": 3,
+  "bt_entry": "open",
+  "bt_cost_pct": 0.2
 }

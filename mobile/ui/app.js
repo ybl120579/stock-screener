@@ -156,6 +156,7 @@ function renderEmpty(title, sub = '') {
 function renderAll() {
   renderStats();
   renderRenew();
+  renderPlan(S.snap || {});
   renderSorts();
   renderList();
   renderFoot();
@@ -401,6 +402,57 @@ async function loadHistory() {
   } catch (e) { /* ignore */ }
 }
 
+function renderPlan(d) {
+  const el = $('#planbar'); if (!el) return;
+  const rg = d.regime, pl = d.plan;
+  if (!rg && !pl) { el.innerHTML = ''; return; }
+  const lv = (rg && rg.level) || 'unknown';
+  const bad = lv === 'bad';
+  const b = (rg && rg.breadth) || {}, pm = (rg && rg.premium) || {};
+  const nums = [];
+  if (b.zt != null) nums.push(`涨停 ${b.zt} 家`);
+  if (b.zhaban_pct != null) nums.push(`炸板 ${b.zhaban_pct}%`);
+  if (pm.avg_pct != null) nums.push(`昨涨停溢价 ${pm.avg_pct > 0 ? '+' : ''}${pm.avg_pct}%`);
+  const tip = bad ? '退潮期 · 建议空仓观望'
+    : (lv === 'unknown' ? '环境数据不全 · 谨慎' : '可以做 · 按计划控仓');
+  el.innerHTML = `<div class="pb ${bad ? 'bad' : (lv === 'unknown' ? 'warn' : 'ok')}" id="btnPlan">
+      <div class="pbl"><i>今日策略</i><b>${esc(tip)}</b></div>
+      <div class="pbn">${esc(nums.join(' · ') || '—')}</div>
+      ${pl && pl.picks && pl.picks.length ? `<span class="pbc">${pl.picks.length} 只计划 · 单票 ${num(pl.position_pct, 0)}% ›</span>` : ''}
+    </div>`;
+}
+
+function openPlan() {
+  const d = S.snap; if (!d) return;
+  const rg = d.regime || {}, pl = d.plan || {}, b = rg.breadth || {}, pm = rg.premium || {};
+  const rows = (pl.picks || []).map((p, i) => `
+    <div class="prow">
+      <div class="ptop"><b>${i + 1}. ${esc(p.name)}</b><span>${p.code}</span>
+        <i class="pq">质量 ${num(p.board_quality, 0)}</i></div>
+      <div class="pmeta">
+        <span>现价 <b>${num(p.price, 2)}</b></span>
+        <span class="dn">止损 ${num(p.stop, 2)}</span>
+        <span class="up">目标 ${num(p.target, 2)}</span>
+        <span>仓位 ${num(p.position_pct, 0)}%</span>
+      </div>
+    </div>`).join('');
+  $('#sheet').classList.add('on');
+  document.body.style.overflow = 'hidden';
+  $('#phead').innerHTML = `<div class="bar"></div><h2>今日交易计划<span>${d.trade_date} · 最多 ${pl.top_n || 5} 只</span></h2>`;
+  $('#pbody').innerHTML = `
+    <div class="pbox ${rg.level === 'bad' ? 'bad' : ''}">
+      <b>${esc((rg.level === 'bad') ? '退潮期 · 建议空仓' : '按计划执行')}</b>
+      <p>${esc(rg.note || '')}</p>
+      <p class="dim">涨停 ${b.zt ?? '—'} 家 · 炸板率 ${b.zhaban_pct ?? '—'}% ·
+        昨日涨停今日溢价 ${pm.avg_pct ?? '—'}%（胜率 ${pm.win_rate ?? '—'}%）</p>
+    </div>
+    ${rows || '<p class="dim">今天没有符合条件的票。</p>'}
+    <div class="pfoot">
+      单票 ${num(pl.position_pct, 0)}% · 同行业最多 ${pl.max_per_industry} 只 ·
+      跌破止损位无条件走 · T+${pl.time_stop_days} 不新高减仓
+    </div>`;
+}
+
 /* ---------------- 详情 ---------------- */
 function metric(label, val, klass = '') {
   return `<div><i>${label}</i><b class="${klass}">${val}</b></div>`;
@@ -462,6 +514,12 @@ async function openSheet(code) {
       ${metric('60日涨幅', sgn(row.gain60_pct), cls(row.gain60_pct))}
       ${metric('股东数据', esc((row.holder_stat_date || '').slice(5) || '—'))}
       ${row.next_close_pct == null ? '' : `
+      ${metric('首板质量', num(row.board_quality, 0) + ' 分',
+               row.board_quality >= 70 ? 'up' : (row.board_quality >= 50 ? '' : 'dn'))}
+      ${metric('同行业首板', (row.ind_zt ?? '—') + ' 只' +
+               (row.ind_rank ? ` · 第 ${row.ind_rank} 个封` : ''))}
+      ${row.release_date ? metric('近期解禁', row.release_date, 'dn') : ''}
+      ${row.reduce_cnt ? metric('近30日减持', row.reduce_cnt + ' 次', 'dn') : ''}
       ${metric('次日开盘', sgn(row.next_open_pct), cls(row.next_open_pct))}
       ${metric('次日最高', sgn(row.next_high_pct), cls(row.next_high_pct))}
       ${metric('次日收盘', sgn(row.next_close_pct), cls(row.next_close_pct))}`}
@@ -597,11 +655,26 @@ function openInfo() {
        所以某一路数据挂了也能出名单。<br>
        云端每交易日 15:40 起跑、最多重试 4 次；本机版服务每天收盘后重跑，当时没开机会在下次启动时补跑。
        本轮的取数情况可以在「筛选漏斗」页底部看到。</p>
+    <h4>今天该不该做（市场环境）</h4>
+    <p>每天收盘后先看三件事：全市场<b>涨停家数</b>、<b>炸板率</b>、<b>昨日涨停今日溢价</b>。
+       任一变差（涨停 &lt;30 家 / 炸板 &gt;45% / 溢价 &lt;−1.5%）就是「退潮期」，
+       首板回踩在退潮期最容易连续吃面，这时顶部小卡片会变红并建议空仓。</p>
+    <h4>交易计划</h4>
+    <p>点顶部那张「今日策略」卡，会给出最多 <b>5 只</b> 的名单：每只带现价、<b>止损价</b>（跌破左侧锚点 3%）、
+       <b>目标价</b>（首板收盘价）、建议仓位（单票 20%，同行业最多 2 只）。
+       规则三条：跌破止损无条件走、T+3 仍不新高就减、同板块不重复压注。</p>
+    <h4>还有两个过滤</h4>
+    <p>· <b>首板质量分</b>：首封时间、炸板次数、封单占流通、是否一字板、首板换手，合成 0–100 分，
+       详情页能看到；炸板多的烂板分很低。<br>
+       · <b>事件风险</b>：未来 5 日内有解禁直接剔除；近 30 日有减持公告扣分。</p>
     <h4>回测过没有</h4>
     <p>有。<b>python backtest.py --days 20</b> 会把每个交易日重放一遍，统计入选股票之后 1/3/5/10 天的表现。
        最近 60 个交易日（08-06 ~ 11-05）的结果：入选 1744 次，T+1 <b>-0.1%</b>、T+5 <b>-0.1%</b>、
        T+10 <b>-0.8%</b>；同期「所有首板股不加条件」是 T+1 -0.2%、T+5 -1.5%、T+10 -2.9%。<br>
-       也就是说：这套过滤比“随便买首板”稳，但绝对收益接近零，<b>不是稳赚策略</b>。
+       但那是「收盘价买」的口径，实际买不到。按<b>真正能成交的价格</b>算
+       （次日开盘买 + 止损/目标/时间止损 + 扣双边成本）、每天只取前 5 名，
+       60 个交易日的均值是 <b>−0.8%</b>（中位 −1.7%，胜率 22%）。<br>
+       结论说白了：这套过滤比“随便买首板”稳，但<b>不是稳赚策略</b>，亏钱的日子要认。
        冷度分确实有区分度：最高分那组 T+5 均值 +1.2%，最低分那组 -0.2%（中间两组 -0.8%~-0.9%）；
        样本只有 60 天、单一市场环境，别把回测当成未来收益的保证。</p>
     <h4>当天 / 次日涨跌</h4>
@@ -760,6 +833,7 @@ function bind() {
 
   document.addEventListener('click', e => {
     if (e.target.closest('#stats [data-funnel]')) { openFunnel(); return; }
+    if (e.target.closest('#btnPlan')) { openPlan(); return; }
 
     const card = e.target.closest('.card');
     if (card) openSheet(card.dataset.code);

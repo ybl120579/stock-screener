@@ -200,3 +200,31 @@ input.q:disabled{opacity:.5}
 .daysum b.wait{font-size:12px;color:var(--dim);font-weight:500;min-width:0}
 .daysum span{color:var(--dim);font-size:11.5px;margin-left:auto}
 #dates .chip b.pct{font-weight:600;margin-left:2px}
+
+
+/* ---- 今日策略卡 ---- */
+.planbar{margin:0 12px 10px}
+.pb{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--card)}
+.pb.ok{border-color:rgba(34,197,139,.45)}
+.pb.warn{border-color:rgba(240,180,60,.45)}
+.pb.bad{border-color:rgba(255,90,95,.5);background:rgba(255,90,95,.07)}
+.pbl{display:flex;align-items:baseline;gap:8px}
+.pbl i{font-style:normal;font-size:12px;color:var(--dim)}
+.pbl b{font-size:14px}
+.pb.ok .pbl b{color:#22c58b}
+.pb.bad .pbl b{color:#ff5a5f}
+.pbn{margin-top:4px;font-size:11.5px;color:var(--dim)}
+.pbc{display:inline-block;margin-top:6px;font-size:12px;color:var(--acc)}
+.pbox{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:12px}
+.pbox.bad{border-color:rgba(255,90,95,.5);background:rgba(255,90,95,.07)}
+.pbox b{font-size:14px}
+.pbox p{margin:6px 0 0;font-size:12px;line-height:1.6;color:var(--txt)}
+.prow{border-top:1px solid var(--line);padding:10px 2px}
+.ptop{display:flex;align-items:baseline;gap:8px}
+.ptop b{font-size:15px}
+.ptop span{font-size:12px;color:var(--dim)}
+.pq{margin-left:auto;font-style:normal;font-size:11px;color:var(--acc);
+    border:1px solid rgba(91,140,255,.4);border-radius:6px;padding:1px 6px}
+.pmeta{display:flex;gap:12px;margin-top:6px;font-size:12px;color:var(--dim);flex-wrap:wrap}
+.pmeta b{color:var(--txt)}
+.pfoot{margin-top:12px;font-size:11.5px;color:var(--dim);line-height:1.7}

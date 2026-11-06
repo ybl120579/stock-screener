@@ -15,6 +15,9 @@ import time
 import numpy as np
 
 from . import datasource as ds
+from . import events as ev
+from . import quality as qual
+from . import regime as reg
 
 MAIN_PREFIX = ("600", "601", "603", "605", "000", "001", "002", "003")
 
@@ -176,10 +179,14 @@ def run_screen(cfg, as_of=None, refresh=False, log=print):
             lhb_on[code] = set(grp["date"])
             lhb_after[code] = sorted(set(grp["date"]))
 
+    # 每日各行业涨停数（用于判断板块效应与龙头）
+    ind_ctx_by_day = {d: qual.industry_context(pools.get(d)) for d in window_days}
+
     rows = []
     for rec in records:
         stage, row, why = _evaluate(rec, klines.get(rec["code"]), T, days, cfg,
-                                    spot, gdhs, hotrank, lhb_after, fundflow)
+                                    spot, gdhs, hotrank, lhb_after, fundflow,
+                                    ind_ctx_by_day.get(rec["board_date"]))
         for k in range(3, stage):
             reached[k] += 1
         if row is None:
@@ -201,8 +208,85 @@ def run_screen(cfg, as_of=None, refresh=False, log=print):
         r["score_parts"] = _score_parts(r)
         r["score"] = _score(r, cfg)
     uniq = [r for r in uniq if r["score"] >= cfg["score_min"]]
+
+    # ---------- 市场环境（今天该不该出手） ----------
+    regime = None
+    try:
+        breadth = reg.breadth_from_spot(spot)
+        prev_day = window_days[-2] if len(window_days) >= 2 else None
+        prem = reg.premium_from_pool(klines, pools.get(prev_day), T)
+        regime = reg.judge(breadth, prem, cfg)
+        regime["breadth"] = breadth
+        regime["premium"] = prem
+        log(f"[环境] {regime['level']} · {regime['note']}")
+    except Exception as e:  # noqa: BLE001
+        log(f"[warn] 市场环境计算失败：{e}")
+        regime = {"level": "unknown", "ok": True, "note": f"环境数据缺失：{str(e)[:40]}"}
+
+    # ---------- 事件风险（解禁 / 减持） ----------
+    rel_days = int(cfg.get("reject_release_in_days", 0) or 0)
+    red_days = int(cfg.get("reject_reduce_days", 0) or 0)
+    if rel_days or red_days:
+        codes_now = [r["code"] for r in uniq]
+        try:
+            rel = ev.release_soon(codes_now, T, rel_days, refresh, log) if rel_days and codes_now else {}
+        except Exception as e:  # noqa: BLE001
+            log(f"[warn] 解禁数据获取失败：{str(e)[:60]}")
+            rel = {}
+            aux_missing.append("解禁")
+        try:
+            red = ev.reduce_recent(codes_now, T, red_days, refresh) if red_days and codes_now else {}
+        except Exception as e:  # noqa: BLE001
+            log(f"[warn] 减持数据获取失败：{str(e)[:60]}")
+            red = {}
+            aux_missing.append("减持")
+        keep = []
+        for r in uniq:
+            r["release_date"] = rel.get(r["code"])
+            r["reduce_cnt"] = int(red.get(r["code"], 0))
+            if r["release_date"]:
+                rejects.append((8, r["code"], r["name"], r["board_date"],
+                                f"{r['release_date']} 解禁，未来 {rel_days} 个自然日内有抛压"))
+                continue
+            if r["reduce_cnt"]:
+                r["score"] = round(r["score"] - float(cfg.get("reduce_penalty", 6.0)) * min(r["reduce_cnt"], 3), 1)
+            keep.append(r)
+        uniq = keep
+        if rel or red:
+            log(f"[事件] 解禁剔除 {sum(1 for r in keep if r.get('release_date'))} / 减持命中 {sum(1 for r in keep if r.get('reduce_cnt'))}")
+
     uniq.sort(key=lambda r: (-r["score"], r["days_since"], r["code"]))
     reached[9] = len(uniq)
+
+    # ---------- 交易计划：Top N + 仓位 + 止损位（同行业上限） ----------
+    plan_n = int(cfg.get("plan_top_n", 5) or 0)
+    plan = None
+    if plan_n:
+        per_ind = int(cfg.get("plan_max_per_industry", 2) or 0)
+        pos = float(cfg.get("plan_position_pct", 20.0))
+        stop_pct = float(cfg.get("plan_stop_pct", 3.0))
+        chosen, ind_used = [], {}
+        for r in uniq:
+            ind = (r.get("industry") or "其他").strip() or "其他"
+            if per_ind and ind_used.get(ind, 0) >= per_ind:
+                continue
+            ind_used[ind] = ind_used.get(ind, 0) + 1
+            chosen.append({
+                "code": r["code"], "name": r["name"], "industry": ind,
+                "score": r["score"], "board_quality": r.get("board_quality"),
+                "price": r["price"], "stop": round(r["pre_close"] * (1 - stop_pct / 100.0), 2),
+                "target": r["board_close"],
+                "position_pct": pos,
+            })
+            if len(chosen) >= plan_n:
+                break
+        plan = {
+            "top_n": plan_n, "position_pct": pos, "max_per_industry": per_ind,
+            "stop_pct": stop_pct, "time_stop_days": int(cfg.get("plan_time_stop_days", 3) or 0),
+            "picks": chosen,
+            "advice": ("空仓观望（环境退潮）" if (regime and not regime.get("ok"))
+                       else f"最多 {plan_n} 只 · 单票 {pos:.0f}% · 跌破止损位走"),
+        }
 
     meta = {
         "trade_date": T,
@@ -223,13 +307,15 @@ def run_screen(cfg, as_of=None, refresh=False, log=print):
             "exclude_hot_rank_top", "lhb_after_penalty", "min_bars")},
         "weights": dict(cfg["weights"]),
         "universe_main_count": int(sum(1 for c in spot.index if is_main_board(c))),
+        "regime": regime,
+        "plan": plan,
         "aux_missing": aux_missing,
         "spot_source": getattr(spot, "attrs", {}).get("source"),
     }
     return {"rows": uniq[: cfg["top_n"]], "all_rows": uniq, "meta": meta}
 
 
-def _evaluate(rec, kl, T, days, cfg, spot, gdhs, hotrank, lhb_after, fundflow):
+def _evaluate(rec, kl, T, days, cfg, spot, gdhs, hotrank, lhb_after, fundflow, ind_ctx=None):
     """返回 (阶段, row, 原因)。阶段：3=K线 4=首板前 5=首板后 6=窗口 7=回踩 8=热度 9=全通过"""
     code, name, d = rec["code"], rec["name"], rec["board_date"]
 
@@ -318,6 +404,26 @@ def _evaluate(rec, kl, T, days, cfg, spot, gdhs, hotrank, lhb_after, fundflow):
     if gain60 is not None and gain60 > cfg["gain60_max_pct"]:
         return 8, None, f"60日涨幅 {gain60:.0f}% 超过 {cfg['gain60_max_pct']:.0f}%"
 
+    # 首板质量 + 板块地位（同一天同行业有几只涨停、是不是最早封的那只）
+    ind_rank, n_ind = 0, 0
+    if ind_ctx:
+        ind_rank, n_ind = qual.industry_rank(rec.get("industry"), rec.get("first_time"), ind_ctx)
+    min_ind = int(cfg.get("min_industry_zt", 0) or 0)
+    if min_ind and n_ind < min_ind:
+        return 8, None, f"首板当天同行业只有 {n_ind} 只涨停（<{min_ind}），没有板块效应"
+
+    seal_f = _f(rec.get("seal_fund"))
+    fcap_f = _f(rec.get("float_mcap"))
+    q_score, q_parts = qual.quality(
+        first_time=rec.get("first_time"), zbc=rec.get("zbc"),
+        seal_ratio_pct=(seal_f / fcap_f * 100.0 if seal_f and fcap_f else None),
+        board_open=float(board_open), board_close=float(board_close),
+        board_high=float(h[j]), board_low=float(lo[j]),
+        board_turnover=float(to[j]))
+    min_q = float(cfg.get("min_board_quality", 0) or 0)
+    if min_q and q_score < min_q:
+        return 8, None, f"首板质量 {q_score:.0f} 分低于门槛 {min_q:.0f}"
+
     holder_avg_wan = holder_chg = holder_stat = None
     if gdhs is not None and code in gdhs.index:
         g = gdhs.loc[code]
@@ -338,6 +444,11 @@ def _evaluate(rec, kl, T, days, cfg, spot, gdhs, hotrank, lhb_after, fundflow):
         "window": "5日内" if days_since <= cfg["short_window_days"] else "10日内",
         "board_pct": round(float(rec.get("pct") or 0), 2),
         "board_turnover": round(float(to[j]), 2),
+        "board_zbc": int(rec.get("zbc") or 0),
+        "board_quality": q_score,
+        "quality_parts": q_parts,
+        "ind_zt": int(n_ind),
+        "ind_rank": int(ind_rank),
         "board_amount_yi": round(float(amt[j]) / 1e8, 2),
         "board_seal_yi": round(_f(rec.get("seal_fund")) / 1e8, 2) if _f(rec.get("seal_fund")) else None,
         "seal_ratio_pct": (round(_f(rec.get("seal_fund")) / _f(rec.get("float_mcap")) * 100, 2)

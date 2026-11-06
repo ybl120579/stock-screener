@@ -111,6 +111,95 @@ def forward_returns(df, i, horizons=(1, 3, 5, 10)):
     return out
 
 
+def trade_rule(df, i, stop_px, target_px, max_hold=10, time_stop=3, cost_pct=0.2):
+    """次日开盘买入 → 按规则出场（先看止损、再看目标），返回明细。
+
+    i 是入选日那根 K 线；i+1 是真正能买的那天。
+    止损价 stop_px 由调用方按「左侧锚点 * (1-3%)」给出；
+    目标价 target_px 用首板收盘价（回到首板高点附近就走）。
+    """
+    o = df["open"].to_numpy(float)
+    h = df["high"].to_numpy(float)
+    lo = df["low"].to_numpy(float)
+    c = df["close"].to_numpy(float)
+    if i + 1 >= len(c) or o[i + 1] <= 0:
+        return None
+    entry = float(o[i + 1])
+    exit_px, reason, hold = None, "time_stop", 0
+    for k in range(1, max_hold + 1):
+        j = i + k
+        if j >= len(c):
+            break
+        hold = k
+        # 先判止损：跳空低开则按开盘价成交，否则按止损价
+        if lo[j] <= stop_px:
+            exit_px = min(float(o[j]), float(stop_px))
+            reason = "stop"
+            break
+        if target_px and h[j] >= target_px:
+            exit_px = max(float(o[j]), float(target_px))
+            reason = "target"
+            break
+        if k >= time_stop and c[j] < entry:
+            exit_px = float(c[j])
+            reason = "time_stop"
+            break
+    if exit_px is None:
+        j = min(i + max_hold, len(c) - 1)
+        exit_px, hold = float(c[j]), j - i
+        reason = "max_hold"
+    gross = (exit_px / entry - 1) * 100
+    return {
+        "entry_px": round(entry, 2),
+        "exit_px": round(exit_px, 2),
+        "ret_gross": round(gross, 2),
+        "ret_net": round(gross - 2 * cost_pct, 2),
+        "exit_reason": reason,
+        "hold_days": int(hold),
+    }
+
+
+def build_regime_map(klines, boards, days, cfg):
+    """每天的涨停家数 / 炸板率 / 昨日涨停溢价（用 K 线自己算，不依赖外部接口）。"""
+    px = {}
+    for code, df in klines.items():
+        px[code] = (df["date"].tolist(), df["close"].to_numpy(float),
+                    df["high"].to_numpy(float), df["close"].to_numpy(float),
+                    df["pct"].to_numpy(float))
+
+    out = {}
+    prev = None
+    for d in days:
+        zt = touched = 0
+        for code, (dates, c, h, cl, pct) in px.items():
+            if d not in dates:
+                continue
+            i = dates.index(d)
+            if pct[i] >= LIM:
+                touched += 1
+                if c[i] >= h[i] * 0.999:
+                    zt += 1
+        zhaban = (touched - zt) / touched * 100 if touched else 0.0
+        prem = None
+        if prev:
+            rets = []
+            for code, (dates, c, h, cl, pct) in px.items():
+                if prev not in dates or d not in dates:
+                    continue
+                ip, id_ = dates.index(prev), dates.index(d)
+                if pct[ip] >= LIM and c[ip] > 0:
+                    rets.append((c[id_] / c[ip] - 1) * 100)
+            if rets:
+                prem = round(float(np.mean(rets)), 2)
+        bad = (zt < cfg.get("regime_min_zt", 30)
+               or zhaban > cfg.get("regime_max_zhaban_pct", 45)
+               or (prem is not None and prem < cfg.get("regime_min_premium_pct", -1.5)))
+        out[d] = {"zt": zt, "zhaban_pct": round(zhaban, 1), "premium_pct": prem,
+                  "level": "bad" if bad else "good"}
+        prev = d
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=20, help="回测最近多少个交易日")
@@ -120,6 +209,12 @@ def main():
     ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                     help="临时覆盖 config 里的参数，可重复，如 --set break_dip_pct=0")
     ap.add_argument("--tag", default="", help="输出文件名后缀，方便对比")
+    ap.add_argument("--entry", default="open", choices=["open", "close"],
+                    help="入场价：open=次日开盘（现实）/ close=当日收盘（不现实，仅对照）")
+    ap.add_argument("--cost", type=float, default=0.2, help="单边交易成本 %（佣金+税+滑点）")
+    ap.add_argument("--topn", type=int, default=0, help="每天只取冷度分前 N 只（0=全部）")
+    ap.add_argument("--no-rule", action="store_true", help="不做规则出场，只看持有 N 日")
+    ap.add_argument("--no-regime", action="store_true", help="不按市场环境过滤交易日")
     args = ap.parse_args()
 
     cfg = cfgmod.load_config()
@@ -166,8 +261,22 @@ def main():
 
     log(f"有真首板记录的股票 {len(boards)} 只")
 
+    regime_map = build_regime_map(klines, boards, days, cfg)
+    if not args.no_regime:
+        nb = sum(1 for v in regime_map.values() if v["level"] == "bad")
+        log(f"市场环境：{len(days)} 天中 {nb} 天判定为退潮期")
+
     daily, all_picks = [], []
     for d in days:
+        if not args.no_regime and regime_map.get(d, {}).get("level") == "bad":
+            daily.append({"date": d, "first_boards": 0, "candidates": 0, "picks": 0,
+                          "pick_codes": [], "regime": regime_map[d], "skipped": True,
+                          "avg_r1_picks": None, "avg_r1_base": None, "avg_r3_picks": None,
+                          "avg_r3_base": None, "avg_r5_picks": None, "avg_r5_base": None,
+                          "avg_r10_picks": None, "avg_r10_base": None})
+            log(f"{d} 环境退潮（涨停 {regime_map[d]['zt']} 家 / 炸板 {regime_map[d]['zhaban_pct']}% / "
+                f"溢价 {regime_map[d]['premium_pct']}%）→ 空仓")
+            continue
         iT = alldays.index(d)
         picks, cand = [], []
         n_board_today = 0
@@ -214,8 +323,23 @@ def main():
             uniq.append(r)
         picks = uniq
         picks.sort(key=lambda r: -r["score"])
+        if args.topn:
+            picks = picks[: args.topn]
         for k, p in enumerate(picks, 1):
             p["rank"] = k
+            p["regime"] = regime_map.get(d, {}).get("level")
+            df = klines[p["code"]]
+            i = df["date"].tolist().index(d) if d in df["date"].tolist() else None
+            if i is not None and not args.no_rule:
+                stop_px = float(p["pre_close"]) * (1 - cfg.get("plan_stop_pct", 3.0) / 100.0)
+                tr = trade_rule(df, i, stop_px, float(p["board_close"]),
+                                max_hold=10, time_stop=int(cfg.get("plan_time_stop_days", 3)),
+                                cost_pct=args.cost)
+                if tr:
+                    p.update(tr)
+                    if args.entry == "close":
+                        # 不现实的口径：当天收盘就买（用来对照）
+                        p["ret_net"] = p.get("r5")
             all_picks.append(p)
 
         daily.append({
@@ -232,6 +356,8 @@ def main():
             "avg_r5_base": _mean([c["r5"] for c in cand]),
             "avg_r10_picks": _mean([p["r10"] for p in picks]),
             "avg_r10_base": _mean([c["r10"] for c in cand]),
+            "regime": regime_map.get(d),
+            "avg_rule_net": _mean([p.get("ret_net") for p in picks]),
         })
         log(f"{d} 首板 {n_board_today:3d} · 窗口候选 {len(cand):3d} → 入选 {len(picks):2d}  "
             f"r5 入选 {_fmt(daily[-1]['avg_r5_picks'])} / 全体 {_fmt(daily[-1]['avg_r5_base'])}")
@@ -311,6 +437,34 @@ def summarize(daily, picks):
                 "r1_mean": _mean([p["r1"] for p in seg]),
                 "r10_mean": _mean([p["r10"] for p in seg]),
             })
+    ruled = [p for p in picks if p.get("ret_net") is not None]
+    if ruled:
+        out["rule"] = {
+            "n": len(ruled),
+            "mean_net": _mean([p["ret_net"] for p in ruled]),
+            "median_net": _median([p["ret_net"] for p in ruled]),
+            "win_rate": _win([p["ret_net"] for p in ruled]),
+            "avg_hold": round(float(np.mean([p.get("hold_days") or 0 for p in ruled])), 2),
+            "reasons": {},
+            "cost_pct": None,
+        }
+        for p in ruled:
+            r = p.get("exit_reason") or "?"
+            out["rule"]["reasons"][r] = out["rule"]["reasons"].get(r, 0) + 1
+
+    by_reg = {}
+    for p in picks:
+        lv = p.get("regime") or "unknown"
+        by_reg.setdefault(lv, []).append(p)
+    out["by_regime"] = {
+        lv: {"n": len(v), "rule_net": _mean([p.get("ret_net") for p in v]),
+             "r5": _mean([p.get("r5") for p in v])}
+        for lv, v in by_reg.items()
+    }
+
+    top = [p for p in picks if (p.get("rank") or 99) <= 5]
+    out["top5"] = {"n": len(top), "rule_net": _mean([p.get("ret_net") for p in top]),
+                   "r5": _mean([p.get("r5") for p in top])}
     return out
 
 
@@ -330,6 +484,21 @@ def print_report(rep, daily, picks):
     for h in (1, 3, 5, 10):
         b = rep["baseline_fwd"][f"r{h}"]["mean_per_day"]
         print(f"  T+{h:<3} 日均等权 {_fmt(b) if b is not None else '-'}")
+    if rep.get("rule"):
+        r = rep["rule"]
+        print("-" * 62)
+        print(f"按规则交易（次日开盘买 → 止损/目标/时间止损，已扣双边成本）：")
+        print(f"  样本 {r['n']}  均值 {_fmt(r['mean_net'])}  中位 {_fmt(r['median_net'])}  "
+              f"胜率 {r['win_rate']}%  平均持有 {r['avg_hold']} 天")
+        print(f"  出场原因：{r['reasons']}")
+    if rep.get("by_regime"):
+        print("-" * 62)
+        print("按市场环境分组：")
+        for lv, v in rep["by_regime"].items():
+            print(f"  {lv:<8} n={v['n']:<4} 规则净收益 {_fmt(v['rule_net']):>8}  r5 {_fmt(v['r5']):>8}")
+    if rep.get("top5"):
+        t = rep["top5"]
+        print(f"  仅取每天前 5 名：n={t['n']}  规则净收益 {_fmt(t['rule_net'])}  r5 {_fmt(t['r5'])}")
     if rep["score_quintiles"]:
         print("-" * 62)
         print("按冷度分分组（Q1=最高分）的 T+5 收益：")

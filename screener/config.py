@@ -27,6 +27,32 @@ DEFAULTS = {
     "time_decay_max": 4.0,          # 首板距今天数越久，冷度分最多扣 N 分
     "time_decay_start_days": 2,     # 距今 <= N 天不扣分
 
+    # ---------- 市场环境（情绪周期）：决定"今天该不该出手" ----------
+    "regime_gate": True,            # True 时环境退潮会在交易计划里给"空仓观望"
+    "regime_min_zt": 30,            # 全市场涨停家数 < 此值 → 退潮
+    "regime_max_zhaban_pct": 45.0,  # 炸板率 > 此值 → 退潮
+    "regime_min_premium_pct": -1.5, # 昨日涨停股今日平均涨幅 < 此值 → 退潮
+
+    # ---------- 首板质量 / 板块地位 ----------
+    "min_board_quality": 0.0,       # 首板质量分下限（0 = 只展示不过滤）
+    "min_industry_zt": 0,           # 首板当天同行业涨停数下限（0 = 不过滤）
+
+    # ---------- 事件风险 ----------
+    "reject_release_in_days": 5,    # 未来 N 日内有解禁 → 剔除（0 = 关闭）
+    "reject_reduce_days": 30,       # 最近 N 日有减持公告 → 扣分（0 = 关闭）
+    "reduce_penalty": 6.0,          # 每条减持公告扣的分（最多按 3 条算）
+
+    # ---------- 交易计划（仓位 / 出场建议） ----------
+    "plan_top_n": 5,                # 每天最多建议买几只
+    "plan_position_pct": 20.0,      # 单票建议仓位（%）
+    "plan_max_per_industry": 2,     # 同行业最多几只
+    "plan_stop_pct": 3.0,           # 跌破左侧锚点 N% 止损
+    "plan_time_stop_days": 3,       # T+N 仍不新高就减仓/离场
+
+    # ---------- 回测口径 ----------
+    "bt_entry": "open",             # 回测入场：open=次日开盘 / close=当日收盘（不现实，仅对照）
+    "bt_cost_pct": 0.2,             # 单边交易成本（%，含佣金+印花税+滑点）
+
     # ---------- 条件三：股票池 ----------
     "exclude_st": True,
     "exclude_gem": True,            # 创业板 300/301
