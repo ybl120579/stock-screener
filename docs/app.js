@@ -107,11 +107,16 @@ async function api(path, opt = {}) {
 }
 
 /* ---------------- 加载 ---------------- */
+let LOAD_SEQ = 0;
+
 async function load(showSkeleton = true) {
+  // 连点两个日期时，只认最后一次请求，避免慢的旧请求把新结果覆盖掉
+  const seq = ++LOAD_SEQ;
   if (showSkeleton && !S.snap) $('#list').innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   const url = '/api/list' + (S.date ? '?date=' + S.date : '');
   try {
     const d = await api(url);
+    if (seq !== LOAD_SEQ) return;
     if (d.empty) {
       renderEmpty(d.message || '还没有生成名单');
       renderStatus(d.status);
@@ -126,6 +131,7 @@ async function load(showSkeleton = true) {
     loadErrorInfo();
     openFromHash();
   } catch (e) {
+    if (seq !== LOAD_SEQ) return;
     const cached = localStorage.getItem('snap:' + (S.date || localStorage.getItem('snap:last')));
     if (cached) {
       S.snap = JSON.parse(cached); S.rows = S.snap.rows || []; S.offline = true;
