@@ -184,3 +184,12 @@ class TestServiceWorker(unittest.TestCase):
         trend = re.search(r"const V = '([^']+)';", self.sw("trend")).group(1)
         self.assertRegex(main, r"^sbcd-\d{14}$", "主页 sw.js 版本号没被构建改写")
         self.assertRegex(trend, r"^trend-\d{14}$", "趋势页 sw.js 版本号没被构建改写")
+
+    def test_copy_prefers_sync_exec_command(self):
+        """复制要先用同步 execCommand：http 局域网下 Clipboard API 不可用，
+        之前的顺序会让手机浏览器直接报「复制失败」。"""
+        for rel in ("", "trend"):
+            src = (DOCS_P / rel / "app.js").read_text(encoding="utf-8")
+            i_exec = src.index("document.execCommand('copy')")
+            i_api = src.index("navigator.clipboard.writeText")
+            self.assertLess(i_exec, i_api, f"{rel}/app.js 复制顺序不对")

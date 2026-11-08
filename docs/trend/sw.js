@@ -5,7 +5,7 @@
  * 新功能要等第二次访问才出现 —— 这正是「加了功能但手机上没变化」的原因。
  * 版本号由 build_trend.py 在构建时写入，每次发布都会换一份缓存。
  */
-const V = 'trend-20261109010635';
+const V = 'trend-20261109011757';
 const SHELL = ['./', './index.html', './app.js', './style.css', './manifest.webmanifest',
                '../icon-192.png', '../icon-512.png'];
 

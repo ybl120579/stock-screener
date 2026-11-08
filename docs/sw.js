@@ -4,7 +4,7 @@
  * 结果就是「代码里加了新功能，手机上却看不到，要再进一次才出现」。
  * 版本号由 build_static.py 在构建时写入，每次发布换一份缓存。
  */
-const V = 'sbcd-20261109010626';
+const V = 'sbcd-20261109011747';
 const SHELL = [
   './', './index.html', './style.css', './app.js',
   './manifest.webmanifest', './icon-192.png', './icon-180.png', './icon-512.png',

@@ -36,27 +36,36 @@ const money = v => {
 
 /* 一键复制股票代码：HTTPS/localhost 用 clipboard API，其余退化为 execCommand */
 function copyText(txt) {
-  const fallback = () => {
-    const ta = document.createElement('textarea');
-    ta.value = txt;
-    ta.setAttribute('readonly', '');
-    ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
-    document.body.appendChild(ta);
-    ta.select(); ta.setSelectionRange(0, txt.length);
-    let ok = false;
-    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
-    document.body.removeChild(ta);
-    return ok;
-  };
+  // 先走「同步 execCommand」这条老路：
+  // 它不挑协议（http 局域网也能用）、不弹权限、在点击手势里最稳。
+  const ta = document.createElement('textarea');
+  ta.value = txt;
+  ta.setAttribute('aria-hidden', 'true');
+  ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;' +
+                     'padding:0;border:0;opacity:.01;font-size:12px;';
+  document.body.appendChild(ta);
+  let ok = false;
+  try {
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    ok = document.execCommand('copy');
+  } catch (e) { ok = false; }
+  document.body.removeChild(ta);
+  if (ok) return Promise.resolve(true);
+
+  // 再试 Clipboard API（需要 https/localhost 且要有用户手势）
   if (navigator.clipboard && window.isSecureContext) {
-    return navigator.clipboard.writeText(txt).then(() => true).catch(() => fallback());
+    return navigator.clipboard.writeText(txt).then(() => true).catch(() => false);
   }
-  return Promise.resolve(fallback());
+  return Promise.resolve(false);
 }
 
 function copyCode(code, ev) {
   if (ev) { ev.preventDefault(); ev.stopPropagation(); }
-  copyText(code).then(ok => toast(ok ? '已复制代码 ' + code : '复制失败，请长按手动复制'));
+  copyText(String(code)).then(ok => {
+    toast(ok ? '已复制代码 ' + code : '复制失败：代码 ' + code + '，可长按选中复制');
+  });
 }
 
 function toast(msg, ms = 2000) {

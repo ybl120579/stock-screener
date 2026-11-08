@@ -75,20 +75,36 @@ async function getJSON(url) {
 }
 
 function copyText(txt) {
-  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(txt);
-  return new Promise((res, rej) => {
-    const ta = document.createElement('textarea');
-    ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select();
-    const ok = document.execCommand('copy');
-    document.body.removeChild(ta);
-    ok ? res() : rej(new Error('copy failed'));
-  });
+  // 先走「同步 execCommand」这条老路：
+  // 它不挑协议（http 局域网也能用）、不弹权限、在点击手势里最稳。
+  const ta = document.createElement('textarea');
+  ta.value = txt;
+  ta.setAttribute('aria-hidden', 'true');
+  ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;' +
+                     'padding:0;border:0;opacity:.01;font-size:12px;';
+  document.body.appendChild(ta);
+  let ok = false;
+  try {
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    ok = document.execCommand('copy');
+  } catch (e) { ok = false; }
+  document.body.removeChild(ta);
+  if (ok) return Promise.resolve(true);
+
+  // 再试 Clipboard API（需要 https/localhost 且要有用户手势）
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(txt).then(() => true).catch(() => false);
+  }
+  return Promise.resolve(false);
 }
+
 function copyCode(code, ev) {
   if (ev) { ev.preventDefault(); ev.stopPropagation(); }
-  copyText(code).then(() => toast('已复制代码 ' + code))
-    .catch(() => toast('复制失败，请长按手动复制'));
+  copyText(String(code)).then(ok => {
+    toast(ok ? '已复制代码 ' + code : '复制失败：代码 ' + code + '，可长按选中复制');
+  });
 }
 
 /* ---------------- 数据 ---------------- */
