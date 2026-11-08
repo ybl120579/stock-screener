@@ -25,3 +25,10 @@
 ::ffff:127.0.0.1 - - [08/Nov/2026 21:51:12] "GET /trend/ HTTP/1.1" 200 -
 ::ffff:127.0.0.1 - - [08/Nov/2026 21:51:12] code 404, message File not found
 ::ffff:127.0.0.1 - - [08/Nov/2026 21:51:12] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [08/Nov/2026 21:58:54] "GET /trend/ HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [08/Nov/2026 21:58:54] code 404, message File not found
+::ffff:127.0.0.1 - - [08/Nov/2026 21:58:54] "GET /favicon.ico HTTP/1.1" 404 -
+192.168.31.188 - - [08/Nov/2026 22:37:41] "GET / HTTP/1.1" 200 -
+192.168.31.188 - - [08/Nov/2026 22:37:41] "GET /trend/ HTTP/1.1" 200 -
+127.0.0.1 - - [08/Nov/2026 22:41:22] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [08/Nov/2026 22:41:22] "GET /trend/ HTTP/1.1" 200 -
