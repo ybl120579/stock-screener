@@ -2,14 +2,14 @@ name: 每日选股
 
 on:
   schedule:
-    # GitHub 的 cron 用 UTC：07:40 UTC = 北京时间 15:40（收盘后 40 分钟）
+    # GitHub 的 cron 用 UTC：03:00 UTC = 北京时间 11:00（上午收盘前最后一会儿）
     # 周一至周五。GitHub 有时会延迟几分钟到半小时才触发，不影响日线数据。
-    - cron: '40 7 * * 1-5'
+    - cron: '0 3 * * 1-5'
     # 多排几次：每次都是独立机器，当天已有快照就直接跳过（--if-missing）。
     # 东财对云机房 IP 偶尔限流几分钟，隔一小时再试基本都能成功。
-    - cron: '20 8 * * 1-5'    # 北京 16:20
-    - cron: '40 9 * * 1-5'    # 北京 17:40
-    - cron: '10 12 * * 1-5'   # 北京 20:10
+    - cron: '20 3 * * 1-5'    # 北京 11:20（备跑）
+    - cron: '40 3 * * 1-5'    # 北京 11:40（再备一次）
+    - cron: '0 4 * * 1-5'     # 北京 12:00（最后兜底）
   workflow_dispatch:
     inputs:
       force:
@@ -53,9 +53,11 @@ jobs:
         run: |
           set -o pipefail
           if [ "${{ inputs.force }}" = "true" ]; then
-            python build_static.py --schedule 15:40 2>&1 | tee build.log
+            python build_static.py --schedule 11:00 2>&1 | tee build.log
+            python build_trend.py 2>&1 | tee -a build.log
           else
-            python build_static.py --if-missing --schedule 15:40 2>&1 | tee build.log
+            python build_static.py --if-missing --schedule 11:00 2>&1 | tee build.log
+            python build_trend.py --if-missing 2>&1 | tee -a build.log
           fi
 
       - name: 记录失败原因

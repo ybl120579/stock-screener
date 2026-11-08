@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0d12">
+<title>强趋势 · 高弹性选股</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;background:#0a0d12;color:#e8edf5;
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-text-size-adjust:100%}
+body{padding:0 0 env(safe-area-inset-bottom)}
+.wrap{max-width:520px;margin:0 auto;padding:0 12px}
+header{padding:14px 12px 10px;display:flex;align-items:center;gap:10px}
+.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#7c5cff,#3fa9ff);
+  display:grid;place-items:center;font-weight:700;font-size:16px;color:#fff;flex:0 0 auto}
+.tt{font-size:17px;font-weight:700;letter-spacing:.3px}
+.sub{font-size:11.5px;color:#8b98ab;margin-top:1px}
+.pills{display:flex;gap:8px;padding:2px 12px 10px}
+.pill{flex:1;text-align:center;padding:9px 0;border-radius:11px;font-size:13.5px;font-weight:600;
+  color:#9aa8bd;background:#131822;border:1px solid #1e2532;text-decoration:none}
+.pill.on{color:#fff;background:linear-gradient(135deg,rgba(124,92,255,.30),rgba(63,169,255,.22));
+  border-color:rgba(124,92,255,.55)}
+.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:2px 0 10px}
+.kpi div{background:#10151e;border:1px solid #1b2230;border-radius:12px;padding:9px 6px;text-align:center}
+.kpi b{display:block;font-size:16px}
+.kpi span{font-size:10.5px;color:#8b98ab}
+.regime{border-radius:12px;padding:11px 12px;font-size:12.5px;line-height:1.6;margin-bottom:10px;
+  border:1px solid #1e2532;background:#10151e}
+.regime.bad{border-color:rgba(255,90,95,.45);background:rgba(255,90,95,.09)}
+.regime.ok{border-color:rgba(43,212,143,.4);background:rgba(43,212,143,.08)}
+.regime b{font-size:14px}
+.regime.bad b{color:#ff5a5f}.regime.ok b{color:#2bd48f}
+.card{background:#10151e;border:1px solid #1b2230;border-radius:14px;padding:12px;margin-bottom:10px}
+.crow{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.rk{color:#5d6b82;font-size:12px;width:14px}
+.nm{font-size:16.5px;font-weight:700}
+.cd{font-size:12px;color:#7d8ba0}
+.sc{margin-left:auto;font-size:19px;font-weight:700;color:#8ea2ff}
+.tag{font-size:10.5px;padding:2px 7px;border-radius:7px;background:rgba(43,212,143,.13);color:#2bd48f}
+.px{display:flex;gap:12px;align-items:baseline;margin:6px 0 8px}
+.px b{font-size:20px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px 8px;font-size:12px}
+.grid div span{display:block;color:#7d8ba0;font-size:10.5px}
+.grid div b{font-weight:600}
+.up{color:#ff5a5f}.dn{color:#2bd48f}
+.plan{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:9px;
+  border-top:1px dashed #1e2530;padding-top:9px;font-size:12.5px}
+.plan span{color:#7d8ba0;font-size:10.5px;display:block}
+.plan b{font-size:14px}
+.foot{color:#6d7a8d;font-size:11px;line-height:1.6;padding:6px 2px 22px}
+table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px}
+th,td{padding:4px 3px;text-align:right;border-bottom:1px solid #161d29}
+th:first-child,td:first-child{text-align:left}
+th{color:#7d8ba0;font-weight:500;font-size:10.5px}
+h3{font-size:13px;color:#9aa8bd;margin:14px 0 6px;font-weight:600}
+</style>
+</head><body>
+<header><div class="logo">趋</div>
+  <div><div class="tt">强趋势 · 高弹性</div>
+  <div class="sub">数据日期 2026-11-06 · 2026-11-08 21:51:11 生成 · 11.1s</div></div>
+</header>
+<nav class="pills">
+      <a class="pill" href="../">首板冷度</a>
+      <a class="pill on" href="./">强趋势</a>
+    </nav>
+<div class="wrap">
+  <div class="kpi">
+    <div><b>5</b><span>入选</span></div>
+    <div><b>3036</b><span>候选池</span></div>
+    <div><b>空仓区</b><span>市况</span></div>
+    <div><b>-7.2%</b><span>大盘 20 日</span></div>
+  </div>
+  <div class="regime bad"><b>空仓区 · 建议观望</b>　大盘 20 日 -7.2%<br>等权指数在 20 日线下方，趋势策略在这种环境最容易连续吃面。名单仅作观察。</div>
+  <div class="foot" style="padding:0 2px 10px">
+    每个交易日 <b>11:00</b> 自动更新（盘中快照，当日数据为当时价格）。
+  </div>
+  <div class="card">
+      <div class="crow"><span class="rk">1</span><span class="nm">豪鹏科技</span>
+        <span class="cd">001283</span>
+        <span class="sc">94.2</span></div>
+      <div class="px"><b>57.39</b>
+        <span class="cd">20 日均额 3.99 亿</span></div>
+      <div class="grid">
+        <div><span>20 日涨幅</span><b class="up">19.6%</b></div>
+        <div><span>相对强度</span><b>98%</b></div>
+        <div><span>距 20 日新高</span><b>3.1%</b></div>
+        <div><span>离 MA20</span><b class="up">11.5%</b></div>
+        <div><span>日均振幅</span><b>6.7%</b></div>
+        <div><span>换手 / 量能</span><b>8.8% / 1.32</b></div>
+      </div>
+      <div class="plan">
+        <div><span>止损（ATR 自适应）</span><b class="dn">52.22</b></div>
+        <div><span>目标</span><b class="up">80.35</b></div>
+      </div>
+    </div><div class="card">
+      <div class="crow"><span class="rk">2</span><span class="nm">邦基科技</span>
+        <span class="cd">603151</span>
+        <span class="sc">93.4</span></div>
+      <div class="px"><b>20.77</b>
+        <span class="cd">20 日均额 0.78 亿</span></div>
+      <div class="grid">
+        <div><span>20 日涨幅</span><b class="up">10.5%</b></div>
+        <div><span>相对强度</span><b>95%</b></div>
+        <div><span>距 20 日新高</span><b>4.1%</b></div>
+        <div><span>离 MA20</span><b class="up">16.0%</b></div>
+        <div><span>日均振幅</span><b>6.6%</b></div>
+        <div><span>换手 / 量能</span><b>7.7% / 3.55</b></div>
+      </div>
+      <div class="plan">
+        <div><span>止损（ATR 自适应）</span><b class="dn">18.90</b></div>
+        <div><span>目标</span><b class="up">29.08</b></div>
+      </div>
+    </div><div class="card">
+      <div class="crow"><span class="rk">3</span><span class="nm">地素时尚</span>
+        <span class="cd">603587</span>
+        <span class="sc">91.0</span></div>
+      <div class="px"><b>14.61</b>
+        <span class="cd">20 日均额 0.88 亿</span></div>
+      <div class="grid">
+        <div><span>20 日涨幅</span><b class="up">17.1%</b></div>
+        <div><span>相对强度</span><b>98%</b></div>
+        <div><span>距 20 日新高</span><b>2.4%</b></div>
+        <div><span>离 MA20</span><b class="up">14.6%</b></div>
+        <div><span>日均振幅</span><b>3.9%</b></div>
+        <div><span>换手 / 量能</span><b>3.2% / 2.53</b></div>
+      </div>
+      <div class="plan">
+        <div><span>止损（ATR 自适应）</span><b class="dn">13.46</b></div>
+        <div><span>目标</span><b class="up">20.45</b></div>
+      </div>
+    </div><div class="card">
+      <div class="crow"><span class="rk">4</span><span class="nm">鹿山新材</span>
+        <span class="cd">603051</span>
+        <span class="sc">90.8</span></div>
+      <div class="px"><b>24.52</b>
+        <span class="cd">20 日均额 2.03 亿</span></div>
+      <div class="grid">
+        <div><span>20 日涨幅</span><b class="up">8.5%</b></div>
+        <div><span>相对强度</span><b>92%</b></div>
+        <div><span>距 20 日新高</span><b>3.7%</b></div>
+        <div><span>离 MA20</span><b class="up">7.4%</b></div>
+        <div><span>日均振幅</span><b>6.9%</b></div>
+        <div><span>换手 / 量能</span><b>6.7% / 1.31</b></div>
+      </div>
+      <div class="plan">
+        <div><span>止损（ATR 自适应）</span><b class="dn">22.31</b></div>
+        <div><span>目标</span><b class="up">34.33</b></div>
+      </div>
+    </div><div class="card">
+      <div class="crow"><span class="rk">5</span><span class="nm">许继电气</span>
+        <span class="cd">000400</span>
+        <span class="sc">90.5</span></div>
+      <div class="px"><b>25.25</b>
+        <span class="cd">20 日均额 5.47 亿</span></div>
+      <div class="grid">
+        <div><span>20 日涨幅</span><b class="up">17.5%</b></div>
+        <div><span>相对强度</span><b>98%</b></div>
+        <div><span>距 20 日新高</span><b>1.0%</b></div>
+        <div><span>离 MA20</span><b class="up">10.5%</b></div>
+        <div><span>日均振幅</span><b>3.8%</b></div>
+        <div><span>换手 / 量能</span><b>3.5% / 1.66</b></div>
+      </div>
+      <div class="plan">
+        <div><span>止损（ATR 自适应）</span><b class="dn">23.34</b></div>
+        <div><span>目标</span><b class="up">35.35</b></div>
+      </div>
+    </div>
+  <h3>筛选漏斗</h3>
+  <table><thead><tr><th>阶段</th><th>剩余</th></tr></thead><tbody><tr><td>主板股票池</td><td>3036</td></tr><tr><td>数据充足</td><td>3031</td></tr><tr><td>价格·流动性</td><td>2437</td></tr><tr><td>市值 30–2000 亿</td><td>2088</td></tr><tr><td>站上 20 日线</td><td>913</td></tr><tr><td>多头排列</td><td>240</td></tr><tr><td>仍在 120 日线上方</td><td>238</td></tr><tr><td>中期仍在涨</td><td>207</td></tr><tr><td>贴近 20 日新高</td><td>164</td></tr><tr><td>活跃且有弹性</td><td>23</td></tr><tr><td>没追太高</td><td>13</td></tr><tr><td>最终入选</td><td>5</td></tr></tbody></table>
+  <h3>历史</h3>
+  <div class="pills" style="padding:0;flex-wrap:wrap"><a class="pill" style="flex:0 0 auto;padding:6px 10px" href="history/2026-11-06.json">11-06·5只</a></div>
+  <div class="foot">
+    规则：主板（不含 ST / 科创 / 创业 / 北交所 / N·C 新股）→ 均线多头排列且站上 120 日线 →
+    离 20 日新高 ≤6% → 换手 3–25%、日均振幅 2.2–9% → 量能 ≥1.0 → 离 MA20 ≤16%、当日涨幅 &lt;9%。<br>
+    出场：次日开盘买；止损按 ATR 自适应（4–9%）；目标 +40%；收盘跌破 10 日线走；最长 15 个交易日。<br>
+    回测（200 天，含市况开关）：464 笔、均值 +1.22%、中位 −3.85%、胜率 29.7%，基准 −0.91%。
+    胜率不高，靠少数大赢家；200 天单一环境，不构成投资建议。
+  </div>
+</div>
+</body></html>

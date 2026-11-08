@@ -12,14 +12,14 @@
   * 运行状态     /api/status      -> 定时任务、最近一次运行、下次运行时间
   * 立即刷新     POST /api/refresh-> 后台重跑一次筛选（单飞，不会并发）
 
-每日自动更新：进程内有一个后台线程，交易日 15:40（可配）之后自动重跑筛选并落盘快照，
+每日自动更新：进程内有一个后台线程，交易日 11:00（可配）之后自动重跑筛选并落盘快照，
 所以只要你把服务挂着（开机自启，见 README），手机每天早上打开就是当天的新名单。
 
 用法：
   python mobile/app.py                # 默认 0.0.0.0:8765，自动发现局域网地址
   python mobile/app.py --port 9000
   python mobile/app.py --run-now      # 启动后立刻跑一次再开服务
-  python mobile/app.py --schedule 15:40
+  python mobile/app.py --schedule 11:00
 """
 
 import argparse
@@ -67,7 +67,7 @@ MAX_ATTEMPTS_PER_DAY = 5
 STATE_LOCK = threading.Lock()
 RUN_LOCK = threading.Lock()
 
-SCHEDULE_TIME = "15:40"     # 交易日收盘后自动跑（和云端 Actions 的 cron 对齐）
+SCHEDULE_TIME = "11:00"     # 交易日收盘后自动跑（和云端 Actions 的 cron 对齐）
 CONFIG_PATH = os.path.join(PROJ, "config.json")
 
 try:  # Windows 控制台默认 GBK，中文会炸，统一切到 UTF-8

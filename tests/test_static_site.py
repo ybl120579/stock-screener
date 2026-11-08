@@ -11,9 +11,11 @@ import json
 import os
 import re
 import unittest
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCS = os.path.join(HERE, "docs")
+DOCS_P = Path(DOCS)
 DATA = os.path.join(DOCS, "data")
 
 ABSOLUTE = re.compile(r'''(?:href|src|action)\s*=\s*["']/''', re.I)
@@ -95,6 +97,41 @@ class TestStaticSite(unittest.TestCase):
         self.assertTrue(st.get("trade_date"))
         self.assertTrue(st.get("next_run"), "status.json 缺 next_run")
         self.assertGreater(st["next_run"], st["trade_date"], "next_run 应该晚于数据日期")
+
+
+class TestTwoStores(unittest.TestCase):
+    """两套系统的胶囊入口：主页要有切换条，docs/trend/ 要有自己的页面。"""
+
+    def test_main_page_has_store_pills(self):
+        html = (DOCS_P / "index.html").read_text(encoding="utf-8")
+        self.assertIn('class="stores"', html)
+        self.assertIn("首板冷度", html)
+        self.assertIn("强趋势", html)
+        self.assertIn('href="trend/"', html)
+
+    def test_trend_page_exists_and_links_back(self):
+        page = DOCS_P / "trend" / "index.html"
+        self.assertTrue(page.exists(), "docs/trend/index.html 不存在")
+        html = page.read_text(encoding="utf-8")
+        self.assertIn('href="../"', html)
+        self.assertIn("强趋势", html)
+        self.assertIn("强趋势", html)
+
+    def test_trend_data_shape(self):
+        data = json.loads((DOCS_P / "trend" / "data.json").read_text(encoding="utf-8"))
+        for k in ("asof", "rows", "funnel", "market", "schedule"):
+            self.assertIn(k, data)
+        self.assertEqual(data["schedule"], "11:00")
+        fun = data["funnel"]
+        self.assertTrue(fun)
+        first = fun[0]
+        self.assertIsInstance(first, dict)
+        self.assertIn("value", first)
+        for r in data["rows"]:
+            for k in ("code", "name", "price", "score", "stop", "target"):
+                self.assertIn(k, r)
+            self.assertLess(r["stop"], r["price"])
+            self.assertGreater(r["target"], r["price"])
 
 
 if __name__ == "__main__":

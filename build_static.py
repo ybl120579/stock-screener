@@ -106,7 +106,7 @@ def main():
     ap = argparse.ArgumentParser(description="生成静态站点到 docs/")
     ap.add_argument("--date", help="指定交易日（默认最近交易日）")
     ap.add_argument("--out", default=os.path.join(HERE, "docs"), help="输出目录")
-    ap.add_argument("--schedule", default="15:40", help="展示用的自动更新时间")
+    ap.add_argument("--schedule", default="11:00", help="展示用的自动更新时间")
     ap.add_argument("--skip-ui", action="store_true", help="只更新数据，不复制前端文件")
     ap.add_argument("--skip-returns", action="store_true",
                     help="不补写历史名单的次日涨跌幅（没网/调试时用）")

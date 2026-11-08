@@ -3,7 +3,7 @@
 本地版（`mobile/app.py`）要电脑开着、同一个 WiFi。云端版把「跑筛选」和「看页面」都搬到云上：
 
 ```
-GitHub Actions（每个交易日尝试 4 次：15:40 / 16:20 / 17:40 / 20:10）
+GitHub Actions（每个交易日尝试 4 次：11:00 / 11:20 / 11:40 / 12:00）
       │  ① python build_static.py  ← 拉东财数据、跑四条件、算出冷度分
       │  ② 把结果写进 docs/data/*.json
       ▼
@@ -56,7 +56,7 @@ docs/
 
 `.github/workflows/daily.yml`：
 
-1. cron 排了 4 个时间点（UTC 07:40 / 08:20 / 09:40 / 12:10 = 北京 15:40 / 16:20 / 17:40 / 20:10，周一到周五）
+1. cron 排了 4 个时间点（UTC 03:00 / 03:20 / 03:40 / 04:00 = 北京 11:00 / 11:20 / 11:40 / 12:00，周一到周五）
 2. 装 `requirements-ci.txt`（requests / pandas / akshare）
 3. 先跑 `python -m unittest discover -s tests`（13 个用例，坏了直接红，不发布错误结果）
 4. `python build_static.py --if-missing`——当天已有快照就跳过，所以后面几次只在前面失败时才真正干活，节假日也不会重复跑
@@ -99,7 +99,7 @@ GitHub 的定时任务偶尔会延迟几分钟到半小时才触发，对**日�
 
 `push_to_github.bat` 双击后：检查改动 → 没有提交就自动 `data: 本地快照` → 推送。
 推完 GitHub Actions 会自动重建页面，约 1 分钟后手机上刷新就能看到。
-如果不想让电脑一直开着，把 `mobile/开机自启-安装.bat` 装上，桌面端每天 15:40 也会自动跑一次（只补本地 `reports/`，云端靠 Actions）。
+如果不想让电脑一直开着，把 `mobile/开机自启-安装.bat` 装上，桌面端每天 11:00 也会自动跑一次（只补本地 `reports/`，云端靠 Actions）。
 
 ## 手动补跑 / 重跑
 
