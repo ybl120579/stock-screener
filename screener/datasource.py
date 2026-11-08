@@ -66,7 +66,12 @@ _LAST_REQ = [0.0]
 _BLOCK_UNTIL = [0.0]
 _TRIPS = [0]
 MAX_TRIPS = 8          # 一轮里被限流这么多次就放弃，别把 CI 的时间预算耗光
-MIN_INTERVAL = 0.25 if LOW_CONCURRENCY else 0.06
+# 云端默认 0.25 秒（保守）；可用 SCREENER_MIN_INTERVAL 覆盖（趋势系统要抓 3000+ 只，
+# 0.25 秒一次会跑到 20 分钟以上，所以要能调快）
+try:
+    MIN_INTERVAL = float(os.environ.get("SCREENER_MIN_INTERVAL") or (0.25 if LOW_CONCURRENCY else 0.06))
+except ValueError:
+    MIN_INTERVAL = 0.25 if LOW_CONCURRENCY else 0.06
 COOLDOWN = 20.0
 
 
