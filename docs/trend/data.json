@@ -1,16 +1,16 @@
 {
  "asof": "2026-11-06",
- "generated_at": "2026-11-08 21:51:11",
- "elapsed_sec": 11.1,
+ "generated_at": "2026-11-08 21:58:42",
+ "elapsed_sec": 317.6,
  "market": {
   "ok": false,
-  "mom20": -7.2
+  "mom20": -7.22
  },
  "funnel": [
   {
    "name": "主板股票池",
    "hint": "全市场主板（不含 ST / 科创 / 创业 / 北交所 / N·C 新股）",
-   "value": 3036
+   "value": 3048
   },
   {
    "name": "数据充足",
@@ -35,12 +35,12 @@
   {
    "name": "多头排列",
    "hint": "MA5 > MA10 > MA20 > MA60",
-   "value": 240
+   "value": 239
   },
   {
    "name": "仍在 120 日线上方",
    "hint": "长期趋势没有走坏",
-   "value": 238
+   "value": 237
   },
   {
    "name": "中期仍在涨",
@@ -144,7 +144,7 @@
     "s_rs": 98.3,
     "s_vol": 89.2,
     "s_atr": 89.4,
-    "s_high": 85.6
+    "s_high": 85.7
    }
   },
   {
@@ -172,7 +172,7 @@
     "s_rs": 94.8,
     "s_vol": 99.0,
     "s_atr": 89.0,
-    "s_high": 80.3
+    "s_high": 80.4
    }
   },
   {
@@ -199,7 +199,7 @@
     "s_mid": 97.7,
     "s_rs": 97.5,
     "s_vol": 97.6,
-    "s_atr": 45.8,
+    "s_atr": 45.7,
     "s_high": 88.5
    }
   },
@@ -207,7 +207,7 @@
    "code": "603051",
    "name": "鹿山新材",
    "price": 24.52,
-   "score": 90.8,
+   "score": 90.9,
    "ret20": 8.5,
    "ret60": 19.5,
    "rs20": 0.925,
@@ -228,38 +228,38 @@
     "s_rs": 92.5,
     "s_vol": 88.9,
     "s_atr": 91.3,
-    "s_high": 82.4
+    "s_high": 82.5
    }
   },
   {
-   "code": "000400",
-   "name": "许继电气",
-   "price": 25.25,
+   "code": "600732",
+   "name": "爱旭股份",
+   "price": 13.4,
    "score": 90.5,
-   "ret20": 17.5,
-   "ret60": 11.2,
-   "rs20": 0.977,
-   "dist_ma20": 10.5,
-   "to_high": 1.0,
-   "atr_pct": 3.79,
-   "turnover": 3.54,
-   "vol_surge": 1.66,
-   "amt20_yi": 5.47,
-   "float_mcap_yi": 256.3,
-   "stop": 23.34,
-   "stop_pct": 7.58,
-   "target": 35.35,
+   "ret20": 22.4,
+   "ret60": 8.4,
+   "rs20": 0.988,
+   "dist_ma20": 12.8,
+   "to_high": 5.2,
+   "atr_pct": 5.36,
+   "turnover": 3.15,
+   "vol_surge": 1.63,
+   "amt20_yi": 5.57,
+   "float_mcap_yi": 282.1,
+   "stop": 12.19,
+   "stop_pct": 9.0,
+   "target": 18.76,
    "target_pct": 40.0,
    "s_parts": {
-    "s_mom": 97.7,
-    "s_mid": 91.4,
-    "s_rs": 97.7,
-    "s_vol": 93.6,
-    "s_atr": 42.5,
-    "s_high": 97.0
+    "s_mom": 98.8,
+    "s_mid": 88.1,
+    "s_rs": 98.8,
+    "s_vol": 93.5,
+    "s_atr": 74.5,
+    "s_high": 75.7
    }
   }
  ],
- "rejects": 3023,
+ "rejects": 3035,
  "schedule": "11:00"
 }
