@@ -14,3 +14,4 @@ mobile/shots/*.raw.png
 docs/_shot*.html
 build.log
 cache/
+nohup.out

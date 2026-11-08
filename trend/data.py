@@ -80,7 +80,8 @@ def load_spot(log=print, refresh=False):
     if "code" not in spot.columns:
         spot = spot.reset_index()
         spot.columns = [str(c).lower() for c in spot.columns]
-    keep = [c for c in ("code", "name", "industry", "float_mcap_yi", "price") if c in spot.columns]
+    keep = [c for c in ("code", "name", "industry", "float_mcap_yi", "price",
+                        "pct", "turnover", "amount") if c in spot.columns]
     out = spot[keep].reset_index(drop=True)
     out["code"] = out["code"].astype(str)
     try:

@@ -136,3 +136,30 @@ class TestTwoStores(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestTrendPage(unittest.TestCase):
+    """强趋势页面的数据与静态资源（和首板页对齐到同一套能力）。"""
+
+    def test_assets_copied(self):
+        t = DOCS_P / "trend"
+        for fn in ("index.html", "app.js", "style.css", "manifest.webmanifest", "sw.js"):
+            self.assertTrue((t / fn).exists(), f"缺 {fn}")
+
+    def test_app_has_core_features(self):
+        js = (DOCS_P / "trend" / "app.js").read_text(encoding="utf-8")
+        for feat in ("openSheet", "openFunnel", "openInfo", "copyText", "drawSpark", "drawKline", "whyLookup"):
+            self.assertIn(f"function {feat}", js)
+        self.assertIn("data-copy", js)
+
+    def test_data_fields(self):
+        d = json.loads((DOCS_P / "trend" / "data.json").read_text(encoding="utf-8"))
+        for k in ("asof", "rows", "funnel", "stages", "rejects_list", "schedule"):
+            self.assertIn(k, d)
+        self.assertEqual(d["schedule"], "11:00")
+        self.assertTrue(d["rows"], "名单为空")
+        r = d["rows"][0]
+        for k in ("code", "name", "score", "stop", "target", "bars", "spark", "pct"):
+            self.assertIn(k, r)
+        self.assertGreaterEqual(len(r["bars"]), 30)
+        self.assertLess(r["stop"], r["price"])
+        self.assertGreater(r["target"], r["price"])

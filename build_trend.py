@@ -293,15 +293,90 @@ def main():
     out = os.path.join(args.out, "trend")
     os.makedirs(os.path.join(out, "history"), exist_ok=True)
 
+    # ---- 给前端补数据：当天涨跌、次日涨跌、迷你走势、K 线 ----
+    close = mats["close"]
+    dates_l = [str(d.date()) for d in close.index]
+    spot_map = {}
+    try:
+        if len(spot):
+            for rec in spot.itertuples(index=False):
+                spot_map[str(getattr(rec, "code", ""))] = rec
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        i_asof = dates_l.index(res["asof"])
+    except ValueError:
+        i_asof = len(dates_l) - 1
+    span = dates_l[max(0, i_asof - 119): i_asof + 1]
+
+    def _f(v):
+        try:
+            x = float(v)
+            return x if x == x else None
+        except Exception:  # noqa: BLE001
+            return None
+
+    for r in res["rows"]:
+        code = r["code"]
+        rec = spot_map.get(code)
+        r["pct"] = _f(getattr(rec, "pct", None)) if rec is not None else None
+        # 次日（历史日期才有）
+        r["next_date"] = dates_l[i_asof + 1] if i_asof + 1 < len(dates_l) else None
+        if r["next_date"]:
+            try:
+                r["next_close_pct"] = (float(close.at[close.index[i_asof + 1], code])
+                                       / float(close.iat[i_asof, close.columns.get_loc(code)]) - 1) * 100
+            except Exception:  # noqa: BLE001
+                r["next_close_pct"] = None
+        # 迷你走势（近 40 日收盘）
+        try:
+            r["spark"] = [round(float(close.at[close.index[k], code]), 2)
+                          for k in range(max(0, i_asof - 39), i_asof + 1)]
+        except Exception:  # noqa: BLE001
+            r["spark"] = []
+        # K 线（近 120 根）
+        bars = []
+        for d in span:
+            try:
+                bars.append([d,
+                             round(float(mats["open"].at[d, code]), 2),
+                             round(float(close.at[d, code]), 2),
+                             round(float(mats["low"].at[d, code]), 2),
+                             round(float(mats["high"].at[d, code]), 2),
+                             round(float(mats["volume"].at[d, code]) / 1e4, 1)])
+            except Exception:  # noqa: BLE001
+                continue
+        r["bars"] = bars
+
+    def _summ(key):
+        vals = [r.get(key) for r in res["rows"]]
+        vals = [v for v in vals if isinstance(v, (int, float))]
+        if not vals:
+            return None
+        return {"n": len(vals),
+                "avg": round(sum(vals) / len(vals), 2),
+                "up": sum(1 for v in vals if v > 0),
+                "down": sum(1 for v in vals if v < 0),
+                "best": round(max(vals), 2),
+                "worst": round(min(vals), 2)}
+
     payload = {
         "asof": res["asof"],
         "generated_at": meta["generated_at"],
         "elapsed_sec": elapsed,
         "market": {"ok": bool(res.get("mkt_ok")), "mom20": res.get("mom20")},
         "funnel": res["funnel"],
-        "stages": S.FUNNEL,
+        "stages": [{"name": n, "hint": h} for n, h in S.FUNNEL],
         "rows": res["rows"],
         "rejects": len(res.get("rejects") or []),
+        "rejects_list": [{"code": str(c), "name": str(n), "why": str(w)}
+                         for c, n, w in (res.get("rejects") or [])][:4000],
+        "day": _summ("pct"),
+        "next": _summ("next_close_pct"),
+        "next_date": res["rows"][0].get("next_date") if res["rows"] else None,
+        "advice": res.get("advice"),
+        "plan": {"stop": "ATR 自适应（4–9%）", "target": "+40%", "hold": "最长 15 日 / 破 MA10 走"},
         "schedule": "11:00",
     }
     with open(os.path.join(out, "data.json"), "w", encoding="utf-8") as fh:
@@ -335,8 +410,17 @@ def main():
     with open(os.path.join(out, "history.json"), "w", encoding="utf-8") as fh:
         json.dump([{"date": d, "count": n} for d, n in hist], fh, ensure_ascii=False)
 
-    with open(os.path.join(out, "index.html"), "w", encoding="utf-8") as fh:
-        fh.write(page_html(res, meta, hist))
+    # 前端：trend/ui/ 下的单页应用（搜索/排序/详情/漏斗/说明），复制到 docs/trend
+    ui_src = os.path.join(HERE, "trend", "ui")
+    if os.path.isdir(ui_src):
+        import shutil
+        for fn in os.listdir(ui_src):
+            src = os.path.join(ui_src, fn)
+            if os.path.isfile(src):
+                shutil.copy2(src, os.path.join(out, fn))
+    else:
+        with open(os.path.join(out, "index.html"), "w", encoding="utf-8") as fh:
+            fh.write(page_html(res, meta, hist))
 
     log(f"[trend] {res['asof']} 入选 {len(rows := res['rows'])} 只 · {elapsed}s → {out}")
     for k, r in enumerate(rows, 1):
