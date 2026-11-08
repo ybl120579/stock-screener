@@ -27,7 +27,7 @@ from trend.screen import bad_name, is_main_board  # noqa: E402
 BJ = timezone(timedelta(hours=8))
 
 
-def ensure_universe(log=print, lmt=300, force=False):
+def ensure_universe(log=print, lmt=200, force=False):
     """有缓存就直接用；缓存过旧或缺失就重新抓一遍。"""
     path = D.UNIVERSE
     if not force and os.path.exists(path):
