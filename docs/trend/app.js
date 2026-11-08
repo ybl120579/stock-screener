@@ -412,8 +412,13 @@ function drawKline(r) {
     const y = Y(v);
     g.save(); g.setLineDash([4, 3]); g.strokeStyle = color; g.lineWidth = 1;
     g.beginPath(); g.moveTo(L, y); g.lineTo(L + px, y); g.stroke(); g.restore();
-    g.fillStyle = color; g.font = '9px system-ui'; g.textAlign = 'left';
-    g.fillText(label + ' ' + Number(v).toFixed(2), L + 2, y - 3);
+    const txt = label + ' ' + Number(v).toFixed(2);
+    g.font = '9px system-ui'; g.textAlign = 'left';
+    const tw = g.measureText(txt).width;
+    g.fillStyle = 'rgba(10,13,18,.86)';
+    g.fillRect(L + 1, y - 12, tw + 5, 11);
+    g.fillStyle = color;
+    g.fillText(txt, L + 3, y - 3);
   };
   hline(r.stop, 'rgba(43,212,143,.95)', '止损');
   hline(r.target, 'rgba(255,90,95,.95)', '目标');
