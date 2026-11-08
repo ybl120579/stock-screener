@@ -64,9 +64,41 @@ function copyText(txt) {
 function copyCode(code, ev) {
   if (ev) { ev.preventDefault(); ev.stopPropagation(); }
   copyText(String(code)).then(ok => {
-    toast(ok ? '已复制代码 ' + code : '复制失败：代码 ' + code + '，可长按选中复制');
+    if (ok) { toast('已复制代码 ' + code); return; }
+    const diag = `secure=${window.isSecureContext} clipboard=${!!navigator.clipboard} exec=${(()=>{try{return document.queryCommandSupported('copy')}catch(e){return 'err'}})()}`;
+    openCopySheet(code, diag);
   });
 }
+
+// 复制失败时兜底：弹出面板，把代码放进一个"已选中"的输入框，
+// 长按就能复制；底部带一行诊断信息，方便定位是哪个 API 不可用。
+function openCopySheet(code, diag) {
+  const sh = $('#sheet');
+  if (!sh) { toast('复制失败：代码 ' + code); return; }
+  sh.classList.add('on');
+  document.body.style.overflow = 'hidden';
+  $('#phead').innerHTML = `<div class="bar"></div>
+    <h2>复制代码 ${esc(code)}</h2>
+    <div class="sub">浏览器不让脚本写剪贴板，长按下面的数字即可复制</div>`;
+  $('#pbody').innerHTML = `<div class="sec">
+      <input id="copyBox" class="copybox" value="${esc(code)}" readonly>
+      <p class="tip">长按上面的数字 → 全选 → 复制；或点下面的「再试一次」。</p>
+      <button class="btn wide" id="copyAgain" type="button">再试一次</button>
+      <p class="diag">${esc(diag)}</p>
+    </div>`;
+  const box = $('#copyBox');
+  if (box) { box.focus(); box.select(); }
+  const again = $('#copyAgain');
+  if (again) {
+    again.addEventListener('click', () => {
+      copyText(String(code)).then(ok => {
+        if (ok) { toast('已复制代码 ' + code); closeSheet(); }
+        else toast('还是不行，请长按上面的数字手动复制');
+      });
+    });
+  }
+}
+
 
 function toast(msg, ms = 2000) {
   const t = $('#toast');

@@ -193,3 +193,11 @@ class TestServiceWorker(unittest.TestCase):
             i_exec = src.index("document.execCommand('copy')")
             i_api = src.index("navigator.clipboard.writeText")
             self.assertLess(i_exec, i_api, f"{rel}/app.js 复制顺序不对")
+
+    def test_copy_failure_has_fallback(self):
+        """复制失败不能只弹一句提示：要给出可长按选中的输入框和诊断信息。"""
+        for rel in ("", "trend"):
+            src = (DOCS_P / rel / "app.js").read_text(encoding="utf-8")
+            self.assertIn("function openCopySheet", src, f"{rel}/app.js 缺少复制兜底面板")
+            self.assertIn("copyBox", src, f"{rel}/app.js 兜底面板没有可选中的输入框")
+            self.assertIn("secure=", src, f"{rel}/app.js 缺少诊断信息")
