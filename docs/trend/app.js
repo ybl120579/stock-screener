@@ -567,6 +567,10 @@ function openFromHash() {
   await Promise.all([load(null), loadHistory()]);
   openFromHash();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register(BASE + 'sw.js').catch(() => {});
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController) location.reload();
+    });
+    navigator.serviceWorker.register(BASE + 'sw.js', { updateViaCache: 'none' }).catch(() => {});
   }
 })();

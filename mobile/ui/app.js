@@ -945,5 +945,11 @@ function debugSizes() {
 bind();
 load().then(() => setTimeout(debugSizes, 300));
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register(BASE + 'sw.js').catch(() => { });
+  // updateViaCache:'none' 让浏览器每次都去拿新的 sw.js；配合 sw.js 里每次构建都变的版本号，
+  // 新版发布后老访客不会继续停在旧外壳上。
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController) location.reload();   // 新版本接管后自动刷新一次
+  });
+  navigator.serviceWorker.register(BASE + 'sw.js', { updateViaCache: 'none' }).catch(() => { });
 }

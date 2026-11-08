@@ -27,6 +27,21 @@ from trend.screen import bad_name, is_main_board  # noqa: E402
 BJ = timezone(timedelta(hours=8))
 
 
+
+def _bust_sw(sw_path, prefix):
+    """每次构建换一次 sw.js 的版本号，避免浏览器拿着旧外壳。"""
+    import re
+    from datetime import datetime
+    if not os.path.exists(sw_path):
+        return
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    src = open(sw_path, encoding="utf-8").read()
+    new = re.sub(r"const V = '[^']*';", f"const V = '{prefix}-{stamp}';", src, count=1)
+    if new != src:
+        open(sw_path, "w", encoding="utf-8").write(new)
+        print(f"[trend] sw.js 缓存版本 → {prefix}-{stamp}")
+
+
 def ensure_universe(log=print, lmt=200, force=False):
     """有缓存就直接用；缓存过旧或缺失就重新抓一遍。"""
     path = D.UNIVERSE
@@ -418,6 +433,7 @@ def main():
             src = os.path.join(ui_src, fn)
             if os.path.isfile(src):
                 shutil.copy2(src, os.path.join(out, fn))
+        _bust_sw(os.path.join(out, "sw.js"), "trend")
     else:
         with open(os.path.join(out, "index.html"), "w", encoding="utf-8") as fh:
             fh.write(page_html(res, meta, hist))

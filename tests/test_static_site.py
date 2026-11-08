@@ -163,3 +163,24 @@ class TestTrendPage(unittest.TestCase):
         self.assertGreaterEqual(len(r["bars"]), 30)
         self.assertLess(r["stop"], r["price"])
         self.assertGreater(r["target"], r["price"])
+
+class TestServiceWorker(unittest.TestCase):
+    """外壳必须「网络优先」，否则新功能会被旧缓存挡住（真实踩过的坑）。"""
+
+    def sw(self, rel):
+        return (DOCS_P / rel / "sw.js").read_text(encoding="utf-8")
+
+    def test_shell_is_network_first(self):
+        for rel in ("", "trend"):
+            src = self.sw(rel)
+            self.assertIn("req.mode === 'navigate'", src, f"{rel}/sw.js 没有网络优先逻辑")
+            # 外壳分支必须是「先 fetch，失败才 catch 回退」，而不是先读缓存
+            self.assertIn("e.respondWith(fetch(req)", src, f"{rel}/sw.js 外壳不是网络优先")
+            self.assertIn("c.navigate(c.url)", src, f"{rel}/sw.js 没有强制刷新旧页面")
+
+    def test_version_is_stamped_at_build(self):
+        import re
+        main = re.search(r"const V = '([^']+)';", self.sw("")).group(1)
+        trend = re.search(r"const V = '([^']+)';", self.sw("trend")).group(1)
+        self.assertRegex(main, r"^sbcd-\d{14}$", "主页 sw.js 版本号没被构建改写")
+        self.assertRegex(trend, r"^trend-\d{14}$", "趋势页 sw.js 版本号没被构建改写")

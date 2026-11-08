@@ -21,6 +21,7 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -41,6 +42,25 @@ import app as mobile_app                       # noqa: E402  (mobile/app.py，�
 
 UI_FILES = ["index.html", "style.css", "app.js", "sw.js", "manifest.webmanifest",
             "icon-180.png", "icon-192.png", "icon-512.png", "icon-512-maskable.png"]
+
+
+def bust_service_worker_cache(sw_path, prefix):
+    """把 sw.js 里的版本号换成当前时间，保证每次发布都让浏览器丢掉旧缓存。
+
+    背景：外壳曾经用 stale-while-revalidate，用户会先看到旧页面，
+    新功能要再进一次才出现。现在外壳走网络优先，同时版本号每次构建都变，
+    双保险。
+    """
+    if not os.path.exists(sw_path):
+        return
+    stamp = datetime.now(BJ).strftime("%Y%m%d%H%M%S")
+    with open(sw_path, encoding="utf-8") as fh:
+        src = fh.read()
+    new_src = re.sub(r"const V = '[^']*';", f"const V = '{prefix}-{stamp}';", src, count=1)
+    if new_src != src:
+        with open(sw_path, "w", encoding="utf-8") as fh:
+            fh.write(new_src)
+        log(f"[ui] sw.js 缓存版本 → {prefix}-{stamp}")
 
 
 def log(msg):
@@ -245,6 +265,7 @@ def main():
             if os.path.exists(src):
                 shutil.copy2(src, os.path.join(out, name))
         open(os.path.join(out, ".nojekyll"), "w").close()
+        bust_service_worker_cache(os.path.join(out, "sw.js"), "sbcd")
 
     if not args.skip_returns:
         # 历史名单的「次日涨跌幅」要等下一个交易日收盘才有，所以每次构建都回头补一遍。
