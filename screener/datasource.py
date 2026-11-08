@@ -693,7 +693,11 @@ def fetch_kline_alt(code: str, lmt: int = 160):
 def get_klines(codes, trade_date: str, lmt: int = 160, refresh: bool = False, workers: int = None):
     """批量获取（带缓存）日K，返回 {code: DataFrame}。"""
     if workers is None:
-        workers = 4 if LOW_CONCURRENCY else 8
+        # 云端默认只有 4 并发，抓 3000+ 只 K 线要 20 分钟以上；可用环境变量调大
+        try:
+            workers = int(os.environ.get("SCREENER_KL_WORKERS") or 0) or (4 if LOW_CONCURRENCY else 8)
+        except ValueError:
+            workers = 4 if LOW_CONCURRENCY else 8
     key = f"klines_{trade_date}_{lmt}"
     p = _cache_path("klines", key)
     store = {}
