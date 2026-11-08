@@ -27,10 +27,11 @@ concurrency:
 jobs:
   screen:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 50
     env:
       # 云机房 IP 更容易被东财限流，抓取并发降到 3
       SCREENER_LOW_CONCURRENCY: '1'
+      SCREENER_MIN_INTERVAL: '0.10'
     steps:
       - uses: actions/checkout@v4
         with:
